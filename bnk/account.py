@@ -2,10 +2,13 @@
 Financial reports with incomplete information
 """
 
+import operator
 import datetime as dt
 import bisect
 import logging
 import collections
+import csv
+from decimal import Decimal
 
 class Account(object):
     """An Account is a black box with transactions and point values.
@@ -62,6 +65,54 @@ class Account(object):
 
         self._transactions = []
         self._values = [Value(topen, 0.0)]
+
+        # allow balances from a previously marked date
+        # to be carried forward into the future (specified in days)
+        self.carryvalues = 0
+
+    def to_csv(self, stream):
+        """Export to csv"""
+
+        items = []
+        items.extend(self._transactions)
+        items.extend(self._values)
+        items.sort(key=operator.itemgetter(0))
+        csvw = csv.writer(stream)
+
+        longmoney = self._values[:]
+        shortmoney = self._values[:]
+        for i in self._transactions:
+            if i.amount >= 0:
+                longmoney.append((i.tstart, i.amount))
+                shortmoney.append((i.tend, i.amount))
+            else:
+                longmoney.append((i.tend, i.amount))
+                shortmoney.append((i.tstart, i.amount))
+        longmoney.sort(key=operator.itemgetter(0))
+        shortmoney.sort(key=operator.itemgetter(0))
+        assert len(longmoney) == len(shortmoney)
+        assert len(longmoney) == len(items)
+
+        tfmt = "{0:%m/%d/%Y}"
+        for (n, i) in enumerate(items):
+            if isinstance(i, Value):
+                r = [tfmt.format(i.t), tfmt.format(i.t), i.value, None]
+            elif isinstance(i, Transaction):
+                r = [tfmt.format(i.tstart), tfmt.format(i.tend), None, i.amount]
+            else:
+                raise ValueError("Unexpected thing!")
+            lmi = longmoney[n]
+            if isinstance(lmi, Value):
+                r.extend([tfmt.format(lmi.t), lmi.value, 0])
+            else:
+                r.extend([tfmt.format(lmi[0]), None, lmi[1]])
+            smi = shortmoney[n]
+            if isinstance(smi, Value):
+                r.extend([tfmt.format(smi.t), smi.value, 0])
+            else:
+                r.extend([tfmt.format(smi[0]), None, smi[1]])
+
+            csvw.writerow(r)
 
     def _check_time(self, t):
         """Ensure a time window t=(t_start, t_end) is valid in that:
@@ -194,7 +245,49 @@ class Account(object):
             if r.t == t:
                 return (r.value, "Marked")
 
+        if self.carryvalues:
+            for r in reversed(self._values):
+                if r.t <= t and t-r.t < self.carryvalues:
+                    return (r.value, 'Carried')
+
         return (float('nan'), "No Data")
+
+
+    def get_value_indices(self, start, end):
+        """Get the indices in self._values for the specfied dates
+        raise an exception if they cannot be found.
+
+        Arguments:
+         start - a specific date, or None (the account opening date)
+         end   - a specific date, or None (the last value)
+
+        Returns:
+         start, end, starti, endi
+          (note start and end will only change if they were initially None)
+        """
+
+        if start is None:
+            start = self._topen
+        if end is None:
+            end = self._values[-1].t
+
+
+        starti = None
+        endi = None
+        for (i, val) in enumerate(self._values):
+            if val.t == start:
+                starti = i
+            elif val.t == end:
+                endi = i
+
+        if starti is None:
+            raise NoValueAtStartDate("%s - %s for %s"%(start, end, self.name))
+        if endi is None:
+            raise NoValueAtEndDate("%s - %s for %s"%(start, end, self.name))
+        if start < self._topen:
+            raise NotOpen("%s - %s for %s"%(start, end, self.name))
+
+        return start, end, starti, endi
 
     def get_performance(self, start, end, keys):
         """Get various performance measures over a specified period
@@ -210,21 +303,9 @@ class Account(object):
          True if no errors occur
         """
 
-        if start is None:
-            start = self._topen
-        if end is None:
-            end = self._values[-1].t
-
+        start, end, starti, endi = self.get_value_indices(start, end)
         keys['start date'] = start
         keys['end date'] = end
-
-        starti = None
-        endi = None
-        for (i, val) in enumerate(self._values):
-            if val.t == start:
-                starti = i
-            elif val.t == end:
-                endi = i
 
         # If there is a value marked at the start and end
         # time, we also know that no transactions cross
@@ -235,16 +316,6 @@ class Account(object):
             # strictly > here since transactions are computed before values
             if trn.tend > end:
                 assert trn.tstart > end, "Transaction spans a value mark!"
-
-        if starti is None:
-            keys['error'] = NoStartDate
-            return keys['error']
-        if endi is None:
-            keys['error'] = NoEndDate
-            return keys['error']
-        if start < self._topen:
-            keys['error'] = NotOpen
-            return keys['error']
 
         #perf['performance'] = self.calculate_irr(svi, evi)
         keys['start balance'] = self._values[starti].value
@@ -261,20 +332,111 @@ class Account(object):
                 else:
                     keys['subtractions'] -= t.amount
 
+        keys['net additions'] = keys['additions'] - keys['subtractions']
         keys['gain'] = (self._values[endi].value -
                         self._values[starti].value -
                         keys['additions'] + keys['subtractions'])
 
+        keys['irr'] = self.get_irr(start, end)
+
         return True
+
+    def get_irr(self, start, end):
+        """Implicity calculate the interest earnings (loss) during
+        a specific period of time.
+
+        Since all transactions are known, we simply identify the value
+        at the start and end of the period and attribute any difference
+        in the values to either (1) interest, or (2) transactions.
+
+        However, since transactions occur during a time window (not necessarily
+        at a single point in time), we need to consider the impacts of
+        differeint transaction timings on the interest calculation.
+
+        There are two scenarios of interest:
+         long money timing - money is "in the account" as long as possible
+         short money timing - money is "in the account" as little as possible
+
+         in the LMT, money is deposited at the start of a window, but
+         withdrawn at the end of a window
+
+         in the SMT, money is withdrawn at the start of a window and
+         deposited at the end.
+
+        Return an envelope of possible interest earnings (loss) that account
+        for the range of possible transaction timings given each transaction's
+        window"""
+
+        start, end, starti, endi = self.get_value_indices(start, end)
+        days = (end - start).days
+
+        longmoney_timing = [(days, self._values[starti].value)]
+        shortmoney_timing = [(days, self._values[starti].value)]
+
+
+        for t in self._transactions:
+
+            if t.tstart > start and t.tstart <= end:
+                assert t.tend <= end, \
+                    "Hm.. this seems to imply a transaction crosses a value mark"
+
+                # longmoney: deposits at start of window, withdrawls at end
+                # shortmoney: deposits at end of window, withdrawls at start
+                if t.is_deposit():
+                    longmoney_timing.append(
+                        ((end - t.tstart).days, t.amount))
+                    shortmoney_timing.append(
+                        ((end - t.tend).days, t.amount))
+                else:
+                    longmoney_timing.append(
+                        ((end - t.tend).days, t.amount))
+                    shortmoney_timing.append(
+                        ((end - t.tstart).days, t.amount))
+
+
+        rates = []
+        for (_, timing) in [('Long', longmoney_timing),
+                            ('Short', shortmoney_timing)]:
+            precision = 0.00001  # in dollars
+            # binary search
+            top = 50
+            bot = -50
+            # shortmoney timing achieves the highest positive interest rate
+            assert sum(Decimal(d[1]) * Decimal(1.0+top/100.0)**Decimal(d[0])
+                       for d in shortmoney_timing)
+
+            while top - bot > 0:
+
+                rate = bot + (top - bot) / 2.0
+                result = 0 + \
+                    sum(Decimal(d[1]) * Decimal(1.0+rate/100.0)**Decimal(d[0]) for d in timing)
+
+                if abs(result - Decimal(self._values[endi].value)) < precision:
+                    rates.append(rate)
+                    break
+                elif result < self._values[endi].value:
+                    bot = rate
+                else:
+                    top = rate
+            else:
+                raise Exception("This shouldn't happen. bot:%f top:%f"%(bot, top))
+
+        rates = [float(((Decimal(1.0+r/100.0)**Decimal(365))-Decimal(1.0))*Decimal(100.0))
+                 for r in rates]
+        return Range(min(rates), max(rates))
 
 
 class Value(collections.namedtuple('_V', "t value")):
     """An account valuation (at a moment in time)"""
 
     def replicate(self, newdate):
+        """Return new instance with same value, new date"""
+
         return Value(newdate, self.value)
 
     def add_to_account(self, account):
+        """Mark specified account with this Value instance"""
+
         return account.mark_value(self)
 
     def __cmp__(self, other):
@@ -302,11 +464,29 @@ class Transaction(collections.namedtuple('_T', "tstart tend amount")):
         return "from {0:%m-%d-%Y} until {1:%m-%d-%Y}: {2:.2f}".format(
             self.tstart, self.tend, self.amount)
 
-class NoStartDate(Exception):
+class Period(collections.namedtuple('_P', 'start end name')):
+    def __format__(self, fmt):
+        if not isinstance(fmt, str):
+            raise TypeError("must be str!")
+        print("Got %s as fmt string"%fmt)
+        return self.name
+
+class Range(collections.namedtuple('_R', 'min max')):
+    def __format__(self, fmt):
+        if not isinstance(fmt, str):
+            raise TypeError("must be str!")
+        fmtstr = "({0:"+fmt+"},{1:"+fmt+"})"
+        return fmtstr.format(self.min, self.max)
+
+
+class NoValueAtStartDate(Exception):
+    """Indicates that the start of a period does not align with a value mark"""
     pass
 
-class NoEndDate(Exception):
+class NoValueAtEndDate(Exception):
+    """Indicates that the end of a period does not align with a value mark"""
     pass
 
 class NotOpen(Exception):
+    """Indicates the account is not open at the specified time"""
     pass
