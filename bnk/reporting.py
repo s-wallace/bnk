@@ -11,8 +11,9 @@ class PerfOverviewReport(object):
             for period in periods:
                 try:
                     row.append(Cell(act.get_irr(period.start, period.end), fmt="{: 6.2f}"))
-                except:
+                except Exception as E:
                     row.append(Cell(None, f=0, s="---"))
+                    print(act.name, period, "Exception--", E, type(E))
             table.set_row(i, row)
 
         try:
@@ -58,7 +59,7 @@ class BasicStatsReport(object):
                 try:
                     perf = {}
                     act.get_performance(period.start, period.end, perf)
-                    row.append(Cell(perf[attribute], fmt="{: .2f}"))
+                    row.append(Cell(perf[attribute], fmt="{: ,.2f}"))
                 except Exception as E:
                     row.append(Cell(None, f=0, s='---'))
             table.set_row(i, row)
@@ -67,7 +68,7 @@ class BasicStatsReport(object):
 
         f = ['Total:']
         for columni in range(len(periods)):
-            f.append(Cell(sum([c for c in self._table.column(columni+1)])))
+            f.append(Cell(sum([c for c in self._table.column(columni+1)]), fmt='{: ,.2f}'))
         self._table.set_footer(f)
 
     def content(self):

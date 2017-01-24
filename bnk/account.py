@@ -68,7 +68,7 @@ class Account(object):
 
         # allow balances from a previously marked date
         # to be carried forward into the future (specified in days)
-        self.carryvalues = 0
+        self.carryvalues = None
 
     def to_csv(self, stream):
         """Export to csv"""
@@ -228,6 +228,17 @@ class Account(object):
             self._values.append(Value(t, 0.0))
             self._tclose = t
 
+    def carrylast(self, todate):
+        """Create a 'false' value mark at the specified date if necessary"""
+
+        if self.get_value(todate)[1] == 'No Data':
+            lastvalue = self._values[-1]
+            if todate < lastvalue.t:
+                raise ValueError("Can't carry to specified date, it occurs before the last mark")
+            self._values.append(Value(todate, lastvalue.value))
+            self.name = self.name + " [c%d]" %(todate - lastvalue.t).days
+
+
     def get_value(self, t):
         """Determine the account value at time t
 
@@ -235,7 +246,6 @@ class Account(object):
         v is a numeric value
         info is a informative string about the value
         """
-
         if t < self._topen:
             return (0.0, "Not Open")
         if self._tclose and t > self._tclose:
@@ -245,49 +255,13 @@ class Account(object):
             if r.t == t:
                 return (r.value, "Marked")
 
-        if self.carryvalues:
-            for r in reversed(self._values):
-                if r.t <= t and t-r.t < self.carryvalues:
-                    return (r.value, 'Carried')
+        #if self.carryvalues:
+        #    for r in reversed(self._values):
+        #        if r.t <= t and t-r.t < self.carryvalues:
+        #            return (r.value, 'Carried')
 
         return (float('nan'), "No Data")
 
-
-    def get_value_indices(self, start, end):
-        """Get the indices in self._values for the specfied dates
-        raise an exception if they cannot be found.
-
-        Arguments:
-         start - a specific date, or None (the account opening date)
-         end   - a specific date, or None (the last value)
-
-        Returns:
-         start, end, starti, endi
-          (note start and end will only change if they were initially None)
-        """
-
-        if start is None:
-            start = self._topen
-        if end is None:
-            end = self._values[-1].t
-
-
-        starti = None
-        endi = None
-        for (i, val) in enumerate(self._values):
-            if val.t == start:
-                starti = i
-            elif val.t == end:
-                endi = i
-
-        if starti is None:
-            raise NoValueAtStartDate("%s - %s for %s"%(start, end, self.name))
-        if endi is None:
-            raise NoValueAtEndDate("%s - %s for %s"%(start, end, self.name))
-        if start < self._topen:
-            raise NotOpen("%s - %s for %s"%(start, end, self.name))
-
-        return start, end, starti, endi
 
     def get_performance(self, start, end, keys):
         """Get various performance measures over a specified period
@@ -302,8 +276,20 @@ class Account(object):
         Returns:
          True if no errors occur
         """
+        if start is None:
+            start = self._topen
+        if end is None:
+            end = self._values[-1].t
 
-        start, end, starti, endi = self.get_value_indices(start, end)
+        startvalue = self.get_value(start)
+        endvalue = self.get_value(end)
+
+        if startvalue[1] != 'Marked' and startvalue[1] != 'Carried':
+            raise ValueError("? startval", startvalue)
+        if endvalue[1] != 'Marked' and endvalue[1] != 'Carried':
+            raise ValueError("? endvalue", endvalue)
+
+        #start, end, starti, endi = self.get_value_indices(start, end)
         keys['start date'] = start
         keys['end date'] = end
 
@@ -317,9 +303,8 @@ class Account(object):
             if trn.tend > end:
                 assert trn.tstart > end, "Transaction spans a value mark!"
 
-        #perf['performance'] = self.calculate_irr(svi, evi)
-        keys['start balance'] = self._values[starti].value
-        keys['end balance'] = self._values[endi].value
+        keys['start balance'] = startvalue[0] #self._values[starti].value
+        keys['end balance'] = endvalue[0] #self._values[endi].value
 
         keys['additions'] = 0
         keys['subtractions'] = 0
@@ -333,12 +318,10 @@ class Account(object):
                     keys['subtractions'] -= t.amount
 
         keys['net additions'] = keys['additions'] - keys['subtractions']
-        keys['gain'] = (self._values[endi].value -
-                        self._values[starti].value -
+        keys['gain'] = (endvalue[0] - startvalue[0] - #self._values[endi].value - self._values[starti].value -
                         keys['additions'] + keys['subtractions'])
 
         keys['irr'] = self.get_irr(start, end)
-
         return True
 
     def get_irr(self, start, end):
@@ -367,11 +350,23 @@ class Account(object):
         for the range of possible transaction timings given each transaction's
         window"""
 
-        start, end, starti, endi = self.get_value_indices(start, end)
+        if start is None:
+            start = self._topen
+        if end is None:
+            end = self._values[-1].t
+
+        startvalue = self.get_value(start)
+        endvalue = self.get_value(end)
+
+        if startvalue[1] != 'Marked' and startvalue[1] != 'Carried':
+            raise ValueError("? startval", startvalue)
+        if endvalue[1] != 'Marked' and endvalue[1] != 'Carried':
+            raise ValueError("? endvalue", endvalue)
+
         days = (end - start).days
 
-        longmoney_timing = [(days, self._values[starti].value)]
-        shortmoney_timing = [(days, self._values[starti].value)]
+        longmoney_timing = [(days, startvalue[0])]
+        shortmoney_timing = [(days, startvalue[0])]
 
 
         for t in self._transactions:
@@ -411,10 +406,10 @@ class Account(object):
                 result = 0 + \
                     sum(Decimal(d[1]) * Decimal(1.0+rate/100.0)**Decimal(d[0]) for d in timing)
 
-                if abs(result - Decimal(self._values[endi].value)) < precision:
+                if abs(result - Decimal(endvalue[0])) < precision:
                     rates.append(rate)
                     break
-                elif result < self._values[endi].value:
+                elif result < endvalue[0]:
                     bot = rate
                 else:
                     top = rate
