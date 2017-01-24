@@ -48,7 +48,7 @@ class AccountIRRTest(unittest.TestCase):
                01-02-2005 close a"""
         accts = read_records(r)
         if WriteCSVs:
-            with open('test_account-test_irr_simple-1-a.csv', 'w') as fout:
+            with open('test_irr-test_irr_simple-1-a.csv', 'w') as fout:
                 accts['a'].to_csv(fout)
         irr = accts['a'].get_irr(dt.date(2000,12,31), dt.date(2005,1,1))
         irounded = (round(irr[0],3), round(irr[1], 3))
@@ -79,7 +79,7 @@ class AccountIRRTest(unittest.TestCase):
         """
         accts = read_records(r)
         if WriteCSVs:
-            with open('test_account-test_irr_simple-2-a.csv', 'w') as fout:
+            with open('test_irr-test_irr_simple-2-a.csv', 'w') as fout:
                 accts['a'].to_csv(fout)
 
         irr = accts['a'].get_irr(dt.date(2000,12,31), dt.date(2002,12,31))
@@ -119,7 +119,7 @@ class AccountIRRTest(unittest.TestCase):
         """
         accts = read_records(r)
         if WriteCSVs:
-            with open('test_account-test_irr_with_overlap-1-a.csv', 'w') as fout:
+            with open('test_irr-test_irr_with_overlap-1-a.csv', 'w') as fout:
                 accts['a'].to_csv(fout)
 
         irr = accts['a'].get_irr(dt.date(2000,12,31), dt.date(2002,12,31))
