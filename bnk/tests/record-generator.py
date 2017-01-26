@@ -34,24 +34,21 @@ if __name__ == "__main__":
             print("{0:%m-%d-%Y} open {1:s}".format(opening, _names[n]))
             accounts.append(AccountStats(_names[n], opening))
 
-    qends = [q for q in fy.quarter_ends(start, end)]
-    if qends[0] < start:
-        qends.pop(0)
-    if qends[-1] > end:
+    quarters = [q for q in fy.quarters(start, end)]
+    if quarters[-1].end > end:
         qends.pop()
-    # now, qends are within the range (start, end)
-    for q in qends:
+    for q in quarters:
         print("")
         has_transaction = False
         for a in accounts:
-            if a.opening + dt.timedelta(days=95) >= q: continue
+            if a.opening + dt.timedelta(days=95) >= q.end: continue
 
             r = random.random()
             if r < a.t_liklihood:
                 r = random.randrange(1,10)
                 r *= 1000
                 if not has_transaction:
-                    print("during %s"%fy.quarter_name(q))
+                    print("during %s"%(q.name))
                     print("---")
                     has_transaction = True
                 print("Assets -> {0:<20s} {1:>10d}".format(a.name, int(r)))
@@ -60,9 +57,10 @@ if __name__ == "__main__":
                 r /= 400.  # /100 cause percentage /4 cause quarterly
                 a.balance *= (1+r)
 
-        print("")
-        print("{0:%m-%d-%Y} balances".format(q))
-        print("---")
-        for a in accounts:
-            if a.opening < q:
+        open_accounts = [a for a in accounts if a.opening < q.end]
+        if open_accounts:
+            print("")
+            print("{0:%m-%d-%Y} balances".format(q.end))
+            print("---")
+            for a in open_accounts:
                 print("{0:<30s} {1:>10d}".format(a.name, int(a.balance)))

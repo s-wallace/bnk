@@ -3,11 +3,11 @@ import datetime as dt
 import unittest
 from bnk import account
 from bnk.__main__ import read_records
-from bnk.parse import NonZeroSumError
+from bnk.parse import NonZeroSumError, read_bnk_data
 from bnk.tests import recstrings
+from bnk.tests import WriteCSVs
 from bnk import groups
 
-WriteCSVs = True
 
 class GroupingTest(unittest.TestCase):
 
@@ -52,3 +52,34 @@ class GroupingTest(unittest.TestCase):
 
             with open('test_grouping-meta_simple-meta.csv', 'w') as fout:
                 m.to_csv(fout)
+
+    def test_account_group_simple(self):
+        accts = read_records(recstrings.a3t3b3a)
+        perf = {}
+
+
+        s = recstrings.a3t3b3a + "\ngroup ab -> (a b)\n"
+        bnkdata = read_bnk_data(s)
+        group = groups.Group('ab', [bnkdata['Account']['a'],
+                                    bnkdata['Account']['b']])
+        self.assertEqual(group, bnkdata['Group']['ab'])
+
+        # try a meta account
+        s2 = recstrings.a3t3b3a + "\nmeta ab -> (a b)\n"
+        bnkdata = read_bnk_data(s2)
+        meta = groups.MetaAccount('ab', [bnkdata['Account']['a'],
+                                         bnkdata['Account']['b']])
+
+        self.assertEqual(meta._transactions,
+                         bnkdata['Meta']['ab']._transactions)
+
+
+        # it should be ok to put the meta statement after the openings
+        lines = recstrings.a3t3b3a.splitlines()
+        lines.insert(3, "\nmeta ab -> (a b)\n")
+        bnkdata = read_bnk_data("\n".join(lines))
+        meta = groups.MetaAccount('ab', [bnkdata['Account']['a'],
+                                         bnkdata['Account']['b']])
+
+        self.assertEqual(meta._transactions,
+                         bnkdata['Meta']['ab']._transactions)

@@ -13,6 +13,38 @@ class Group(object):
         self._members = tuple(iterable)
         self._name = name
 
+    def __str__(self):
+        return "Group: {0:s} [{1:s}]".format(self._name,
+                                             ",".join((a.name for a in self._members)))
+
+    def __getitem__(self, key):
+        return self._members[key]
+
+    def __len__(self):
+        return len(self._members)
+
+    def __contains__(self, k):
+        return k in self._members
+
+    def __iter__(self):
+        return iter(self._members)
+
+    def __reversed__(self):
+        return reversed(self._members)
+
+    def __eq__(self, other):
+        try:
+            if self._members != other._members:
+                print("My members:", self._members, "Other", other._members)
+                return False
+            if self._name != other._name:
+                print("My name:", self._name, "Other", other._name)
+                return False
+            return True
+        except Exception as E:
+            print("Exception", E)
+        print("!? false")
+        return False
 
 class MetaAccount(account.Account):
     """A single account that captures all the transactions/valuations of
@@ -52,7 +84,7 @@ class MetaAccount(account.Account):
             #print("Marking",date, v)
             self.mark_value(account.Value(date, v))
 
-        self._group = Group(contributors, name)
-        
+        self._group = Group(name, contributors)
+
         #print("Meta Account:", self._values)
         #print("Meta Account:", self._transactions)

@@ -11,6 +11,7 @@ test:
 
 cleaner:
 	find ${TOP} -name "*~" | xargs rm
+	find ${TOP} -name "*__pycache__" | xargs rm -r	
 
 lint-main:
 	pylint bnk --ignore=parsetab.py,tests

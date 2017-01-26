@@ -37,6 +37,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print("ARGS:", args)
     if not args.date:
-        args.date = fy.enddate_of_last_complete_quarter(dt.date.today())
+        args.date = fy.end_of_completed_quarter(dt.date.today())
 
     main(args)

@@ -4,6 +4,7 @@ import sys
 import pdb
 import datetime as dt
 from bnk.account import Account, Value, Transaction
+from bnk.groups import Group, MetaAccount
 
 class NonZeroSumError(Exception):
     pass
@@ -34,14 +35,16 @@ class Record():
 
 reserved = {
     'open' : 'OPEN',
+    'group' : 'GROUP',
+    'meta' : 'META',
     'close': 'CLOSE',
     'from' : 'FROM',
     'until' : 'UNTIL',
     'during' : 'DURING',
     'balances' : 'BALANCES'
 }
-tokens = ['SEP', 'YEAR', 'DATESPEC', 'NUMBER', 'QUARTER',
-          'ID', 'RPAREN', 'LPAREN', 'TRANSFER'] + list(reserved.values())
+tokens = ['SEP', 'YEAR', 'DATEMDY', 'NUMBER', 'QUARTER',
+          'ID', 'RPAREN', 'LPAREN', 'R_ARROW'] + list(reserved.values())
 
 Q = {'1': ((1, 1), (3, 31)),
      '2': ((4, 1), (6, 30)),
@@ -53,13 +56,13 @@ t_ignore = '[\t ]+'
 t_ignore_COMMENT = r'//.*'
 t_RPAREN = r'\)'
 t_LPAREN = r'\('
-t_TRANSFER = r'->'
+t_R_ARROW = r'->'
 
 def t_newline(t):
     r'\n+'
     t.lexer.lineno += t.value.count("\n")
 
-def t_DATESPEC(t):
+def t_DATEMDY(t):
     r'\d\d-\d\d-\d\d\d\d'
     t.value = dt.date(int(t.value[6:10]),
                       int(t.value[0:2]), int(t.value[3:5]))
@@ -108,8 +111,10 @@ def t_error(t):
 import ply.lex as lex
 lexer = lex.lex()
 
-def is_new_account_name(name):
-    return not name in lexer.ACCOUNTS
+def is_new_name(name):
+    if name in lexer.ACCOUNTS: return False
+    return True
+
 
 def build_record(account, r, date, lineno):
     if not account in lexer.ACCOUNTS:
@@ -147,23 +152,58 @@ def p_statement_transactions(t):
     t[0] = items
 
 def p_statement_datespec_balances(t):
-    'statement : DATESPEC BALANCES SEP balances'
+    'statement : DATEMDY BALANCES SEP balances'
     t[0] = []
     for (act, val, lineno) in t[4]:
         t[0].append(build_record(act, Value(t[1], val), t[1], lineno))
 
+def p_statement_oneline_balance(t):
+    'statement : DATEMDY ID NUMBER'
+    t[0] = [build_record(t[2],
+                         Value(t[1], t[3]), t[1], t.lineno(3))]
+
+def p_statement_oneline_transaction(t):
+    'statement : daterange ID R_ARROW ID NUMBER'
+    t[0] = []
+    t[0].append(build_record(t[2], Transaction(t[1][0], t[1][1], -t[5]),
+                             t[1][0], t.lineno(5)))
+    t[0].append(build_record(t[4], Transaction(t[1][0], t[1][1], t[5]),
+                             t[1][0], t.lineno(5)))
+
+def p_statement_oneline_transaction_single_date(t):
+    'statement : DATEMDY ID R_ARROW ID NUMBER'
+    t[0] = []
+    t[0].append(build_record(t[2], Transaction(t[1], t[1], -t[5]),
+                             t[1], t.lineno(5)))
+    t[0].append(build_record(t[4], Transaction(t[1], t[1], t[5]),
+                             t[1], t.lineno(5)))
+
+
 def make_account(name, opening, t):
-    if not is_new_account_name(name):
+    if not is_new_name(name):
         pdb.set_trace()
         raise SyntaxError("Can't open an existing account! %s line:%d"
                           (name, t.lineno(3)))
 
     lexer.ACCOUNTS[name] = Account(name, opening)
 
+def make_group(name, members, t):
+    if not is_new_name(name):
+        raise SyntaxError("?")
+    lexer.GROUPS[name] = Group(name, [lexer.ACCOUNTS[n] for n in members])
+
+def make_meta(name, members, t):
+    if not is_new_name(name):
+        raise SyntaxError("?")
+    # initially, this needs to be created as a group
+    # until records are all processed
+    lexer.META[name] = Group(name, [lexer.ACCOUNTS[n] for n in members])
+
+
 def p_statement_open(t):
-    'statement : DATESPEC OPEN ID'
+    'statement : DATEMDY OPEN ID'
     name = t[3]
-    if not is_new_account_name(name):
+    if not is_new_name(name):
         # TODO, could use SyntaxError with better error handling...
         raise ValueError("Bad Account Name? %s line:%d"%(name, t.lineno(3)))
 
@@ -175,13 +215,36 @@ def p_statement_open(t):
     t[0] = []
 
 def p_statement_close(t):
-    'statement : DATESPEC CLOSE ID'
+    'statement : DATEMDY CLOSE ID'
     name = t[3]
-    if is_new_account_name(name):
+    if is_new_name(name):
         raise SyntaxError("Bad Account Name? %s line:%d"%(name, t.lineno(3)))
     closing = dt.date(t[1].year, t[1].month, t[1].day)
     lexer.ACCOUNTS[name].set_closing(closing)
     t[0] = []
+
+def p_statement_group(t):
+    'statement : GROUP ID R_ARROW LPAREN groupmembers RPAREN'
+    if not is_new_name(t[2]):
+        raise ValueError("Bad Group Name? %s line:%d"%(t[2], t.lineno(2)))
+    make_group(t[2], t[5], t)
+    t[0] = []
+
+def p_statement_meta(t):
+    'statement : META ID R_ARROW LPAREN groupmembers RPAREN'
+    if not is_new_name(t[2]):
+        raise ValueError("Bad Group Name? %s line:%d"%(t[2], t.lineno(2)))
+    make_meta(t[2], t[5], t)
+    t[0] = []
+
+def p_groupmembers_recursive(t):
+    'groupmembers : ID groupmembers'
+    t[0] = [t[1]] + t[2]
+
+
+def p_groupmembers_basecase(t):
+    'groupmembers : ID'
+    t[0] = [t[1]]
 
 def p_balances_bal_bals(t):
     'balances : balance balances'
@@ -212,12 +275,12 @@ def p_transaction(t):
     t[0] = [(t[1], t[2], t.lineno(2))]
 
 def p_transfer(t):
-    'transaction : ID TRANSFER ID NUMBER'
+    'transaction : ID R_ARROW ID NUMBER'
     t[0] = [(t[1], -t[4], t.lineno(2)),
             (t[3], t[4], t.lineno(2))]
 
 def p_daterange_ds_ds(t):
-    'daterange : FROM DATESPEC UNTIL DATESPEC'
+    'daterange : FROM DATEMDY UNTIL DATEMDY'
     t[0] = (dt.date(t[2].year, t[2].month, t[2].day),
             dt.date(t[4].year, t[4].month, t[4].day))
 
@@ -243,8 +306,39 @@ import ply.yacc as yacc
 parser = yacc.yacc()
 
 
-def parse(string):
+def read_bnk_data(record_string):
+    """Read records
+
+    Arguments:
+      a record_string to read
+
+    Returns:
+     dictionary mapping account names -> account isntances
+    """
+
+    if not isinstance(record_string, str): return None
+
     lexer.lineno = 0
     lexer.ACCOUNTS = {}
-    result = parser.parse(string)
-    return result
+    lexer.GROUPS = {}
+    lexer.META = {}
+    result = parser.parse(record_string)
+    for rec in result:
+        try:
+            account = lexer.ACCOUNTS[rec.account()]
+            rec.record().add_to_account(account)
+
+        except ValueError as e:
+            print("** Failed to update account with parsed data **",
+                  file=sys.stderr)
+            print("  Record: %s"%rec, file=sys.stderr)
+            print("  Reason: %s"%e, file=sys.stderr)
+            raise e
+
+    # now actually create the meta accounts
+    # what's in lexer.META at this point is a Group, not a MetaAccount
+    _m = {name:MetaAccount(name, lexer.META[name])
+          for name in lexer.META}
+
+    return {'Account':dict(lexer.ACCOUNTS), 'Group':dict(lexer.GROUPS),
+            'Meta':_m}

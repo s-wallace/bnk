@@ -6,6 +6,7 @@ from bnk.__main__ import read_records
 from bnk.parse import NonZeroSumError
 from bnk import tables
 import os
+from bnk.tests import WriteCSVs
 
 Verbose = 0
 try:
@@ -14,8 +15,6 @@ try:
 except KeyError:
     pass
 
-
-WriteCSVs = False
 
 def show(args):
     global Verbose

@@ -4,8 +4,7 @@ import unittest
 from bnk import account
 from bnk.__main__ import read_records
 from bnk.parse import NonZeroSumError
-
-WriteCSVs = False
+from bnk.tests import WriteCSVs
 
 class AccountIRRTest(unittest.TestCase):
     def test_irr_simple(self):
