@@ -87,6 +87,91 @@ class AccountIRRTest(unittest.TestCase):
         # Using XIRR in LibreOffice
         self.assertEqual(irounded, (16.716, 20.201))
 
+    def test_irr_exact_timing(self):
+        r = """12-30-2009 open a
+               12-30-2000 open Assets
+
+               12-31-2009 balances
+               ---
+               a 100000
+
+               from 12-31-2010 until 12-31-2010
+               ---
+               Assets -> a  50000
+
+               12-31-2010 balances
+               ---
+               a 160000
+        """
+        accts = read_records(r)
+        irr = accts['a'].get_irr(dt.date(2009,12,31), dt.date(2010,12,31))
+        irounded = (round(irr[0],5), round(irr[1], 5))
+        # Using XIRR in LibreOffice (TEST 1)
+        #  in test_irr_test_irr_exact_timing_1-3.ods
+        self.assertEqual(irounded, (10.0, 10.0))
+
+        r = """12-30-2009 open a
+               12-30-2000 open Assets
+
+               12-31-2009 balances
+               ---
+               a 100000
+
+               12-31-2010 balances
+               ---
+               a 110000
+        """
+        accts = read_records(r)
+        irr = accts['a'].get_irr(dt.date(2009,12,31), dt.date(2010,12,31))
+        irounded = (round(irr[0],5), round(irr[1], 5))
+        # Using XIRR in LibreOffice (TEST 2)
+        #  in test_irr_test_irr_exact_timing_1-3.ods
+        self.assertEqual(irounded, (10.0, 10.0))
+
+        r = """12-30-2009 open a
+               12-30-2000 open Assets
+
+               12-31-2009 balances
+               ---
+               a 100000
+
+               from 12-30-2010 until 12-30-2010
+               ---
+               Assets -> a  50000
+
+               12-31-2010 balances
+               ---
+               a 160000
+        """
+        accts = read_records(r)
+        irr = accts['a'].get_irr(dt.date(2009,12,31), dt.date(2010,12,31))
+        irounded = (round(irr[0],5), round(irr[1], 5))
+        # Using XIRR in LibreOffice (TEST 3)
+        #  in test_irr_test_irr_exact_timing_1-3.ods
+        self.assertEqual(irounded, (9.98696, 9.98696))
+
+        r = """12-30-2009 open a
+               12-30-2000 open Assets
+
+               12-31-2009 balances
+               ---
+               a 100000
+
+               from 12-30-2010 until 12-31-2010
+               ---
+               Assets -> a  50000
+
+               12-31-2010 balances
+               ---
+               a 160000
+        """
+        accts = read_records(r)
+        irr = accts['a'].get_irr(dt.date(2009,12,31), dt.date(2010,12,31))
+        irounded = (round(irr[0],5), round(irr[1], 5))
+        # Using XIRR in LibreOffice (combined tests 1 and 3)
+        #  in test_irr_test_irr_exact_timing_1-3.ods
+        self.assertEqual(irounded, (9.98696, 10))
+
 
     def test_irr_with_overlap(self):
         r = """12-30-2000 open a
