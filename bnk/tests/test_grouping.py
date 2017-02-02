@@ -58,14 +58,14 @@ class GroupingTest(unittest.TestCase):
         perf = {}
 
 
-        s = recstrings.a3t3b3a + "\ngroup ab -> (a b)\n"
+        s = recstrings.a3t3b3b + "\ngroup ab -> (a b)\n"
         bnkdata = read_bnk_data(s)
         group = groups.Group('ab', [bnkdata['Account']['a'],
                                     bnkdata['Account']['b']])
         self.assertEqual(group, bnkdata['Group']['ab'])
 
         # try a meta account
-        s2 = recstrings.a3t3b3a + "\nmeta ab -> (a b)\n"
+        s2 = recstrings.a3t3b3b + "\nmeta ab -> (a b)\n"
         bnkdata = read_bnk_data(s2)
         meta = groups.MetaAccount('ab', [bnkdata['Account']['a'],
                                          bnkdata['Account']['b']])
@@ -75,11 +75,22 @@ class GroupingTest(unittest.TestCase):
 
 
         # it should be ok to put the meta statement after the openings
-        lines = recstrings.a3t3b3a.splitlines()
+        lines = recstrings.a3t3b3b.splitlines()
         lines.insert(3, "\nmeta ab -> (a b)\n")
         bnkdata = read_bnk_data("\n".join(lines))
         meta = groups.MetaAccount('ab', [bnkdata['Account']['a'],
                                          bnkdata['Account']['b']])
-
+        mab = bnkdata['Meta']['ab']
         self.assertEqual(meta._transactions,
-                         bnkdata['Meta']['ab']._transactions)
+                         mab._transactions)
+
+        # the meta account should have marked values at two places
+        self.assertEqual(mab.get_value(dt.date(2001,12,31))[1], "Marked")
+        self.assertEqual(mab.get_value(dt.date(2002,12,31))[1], "Marked")
+        self.assertEqual(mab.get_value(dt.date(2002,3,31))[1], "No Data")
+
+        actb = bnkdata['Account']['b']
+        # account b should have marked balues at three places
+        self.assertEqual(actb.get_value(dt.date(2001,12,31))[1], "Marked")
+        self.assertEqual(actb.get_value(dt.date(2002,12,31))[1], "Marked")
+        self.assertEqual(actb.get_value(dt.date(2002,3,31))[1], "Marked")

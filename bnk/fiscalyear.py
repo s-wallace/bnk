@@ -6,8 +6,9 @@ start_of_ return the date of the start of the period
 period_ return a Period instance
 
 """
-from bnk.account import Period
 import datetime as dt
+from bnk.account import Period
+
 
 
 def name_of_quarter(date):
@@ -61,7 +62,8 @@ def quarters(fromdate, todate):
 
     def pqy(qend_i):
         """Return -1 if the quarter end date is 3,31, else return 0"""
-        if qend_i == 0: return -1
+        if qend_i == 0:
+            return -1
         return 0
 
     qends = [(3, 31), (6, 30), (9, 30), (12, 31)]

@@ -17,7 +17,7 @@ class Account(object):
       1. It has an opening date, topen. At any point
          t <= topen, the balance is 0.
       2. It has a closing date, tclose. At any point
-         t > tclose, the balance is 0.
+         t >= tclose, the balance is 0.
       3. You can add money to it (at time topen<=t<=tclose)
       4. You can take money out of it (at time topen<=t<=tclose)
       5. It has a value at any point between topen and tclose
@@ -113,6 +113,18 @@ class Account(object):
                 r.extend([tfmt.format(smi[0]), None, smi[1]])
 
             csvw.writerow(r)
+
+    def is_open(self, t):
+        """True iff the account is open at time t"""
+
+        if t < self._topen:
+            return False
+        # by 'open' I mean that there may be transactions, so
+        # so, we want > _tclose since there could be transactions
+        # prior to the 0 balance at _tclose
+        if self._tclose and t > self._tclose:
+            return False
+        return True
 
     def _check_time(self, t):
         """Ensure a time window t=(t_start, t_end) is valid in that:
@@ -231,12 +243,12 @@ class Account(object):
     def carrylast(self, todate):
         """Create a 'false' value mark at the specified date if necessary"""
 
-        if self.get_value(todate)[1] == 'No Data':
+        if self.get_value(todate)[1] != 'Marked':
             lastvalue = self._values[-1]
             if todate < lastvalue.t:
                 raise ValueError("Can't carry to specified date, it occurs before the last mark")
             self._values.append(Value(todate, lastvalue.value))
-            self.name = self.name + " [c%d]" %(todate - lastvalue.t).days
+            self.name = self.name + " [cl%d]" %(todate - lastvalue.t).days
 
 
     def get_value(self, t):
@@ -244,7 +256,7 @@ class Account(object):
 
         Return a tuple (v,info) such that:
         v is a numeric value
-        info is a informative string about the value
+        info is a informative string
         """
         if t < self._topen:
             return (0.0, "Not Open")
@@ -255,10 +267,10 @@ class Account(object):
             if r.t == t:
                 return (r.value, "Marked")
 
-        #if self.carryvalues:
-        #    for r in reversed(self._values):
-        #        if r.t <= t and t-r.t < self.carryvalues:
-        #            return (r.value, 'Carried')
+        if self.carryvalues:
+            for r in reversed(self._values):
+                if r.t <= t and t-r.t < self.carryvalues:
+                    return (r.value, 'Carried', t-r.t)
 
         return (float('nan'), "No Data")
 
@@ -289,6 +301,14 @@ class Account(object):
         if endvalue[1] != 'Marked' and endvalue[1] != 'Carried':
             raise ValueError("? endvalue", endvalue)
 
+
+        carrylength = 0
+        if startvalue[1] == 'Carried':
+            carrylength = max(carrylength, startvalue[2].days)
+        if endvalue[1] == 'Carried':
+            carrylength = max(carrylength, endvalue[2].days)
+
+        keys['carry'] = carrylength
         #start, end, starti, endi = self.get_value_indices(start, end)
         keys['start date'] = start
         keys['end date'] = end
@@ -296,12 +316,13 @@ class Account(object):
         # If there is a value marked at the start and end
         # time, we also know that no transactions cross
         # those boundaries.  Thus, this check should be redundant
+        # (except if carrys happen)
         for trn in self._transactions:
-            if trn.tstart <= start:
-                assert trn.tend <= start, "Transaction spans a value mark!"
+            if trn.tstart <= start and trn.tend > start:
+                raise ValueError('Transaction spans start date (carry?)')
             # strictly > here since transactions are computed before values
-            if trn.tend > end:
-                assert trn.tstart > end, "Transaction spans a value mark!"
+            if trn.tend > end and trn.tstart <= end:
+                raise ValueError('Transaction spans end date (carry?)')
 
         keys['start balance'] = startvalue[0] #self._values[starti].value
         keys['end balance'] = endvalue[0] #self._values[endi].value
@@ -463,7 +484,7 @@ class Period(collections.namedtuple('_P', 'start end name')):
     def __format__(self, fmt):
         if not isinstance(fmt, str):
             raise TypeError("must be str!")
-        print("Got %s as fmt string"%fmt)
+
         return self.name
 
 class Range(collections.namedtuple('_R', 'min max')):

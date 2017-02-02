@@ -1,10 +1,15 @@
 """bnk record string parser"""
-
+import logging
+from collections import OrderedDict
 import sys
 import pdb
 import datetime as dt
 from bnk.account import Account, Value, Transaction
 from bnk.groups import Group, MetaAccount
+
+# pylint: disable=invalid-name
+
+_log = logging.getLogger(__name__)
 
 class NonZeroSumError(Exception):
     pass
@@ -105,7 +110,7 @@ def t_ID(t):
     return t
 
 def t_error(t):
-    print("Broken lexing! '%s'"%t.value[0])
+    _log.critical("Broken lexing! '%s'", str(t.value[0]))
     raise SyntaxError(t)
 
 import ply.lex as lex
@@ -118,9 +123,8 @@ def is_new_name(name):
 
 def build_record(account, r, date, lineno):
     if not account in lexer.ACCOUNTS:
-        print("WARNING!",
-              "No Opening Date for account '%s' (line: %d)"%(account, lineno),
-              file=sys.stderr)
+        _log.warning("No Opening Date for account '%s' (line: %d)",
+                     account, lineno)
 
         lexer.ACCOUNTS[account] = Account(account,
                                           dt.date.min + dt.timedelta(days=1))
@@ -329,16 +333,13 @@ def read_bnk_data(record_string):
             rec.record().add_to_account(account)
 
         except ValueError as e:
-            print("** Failed to update account with parsed data **",
-                  file=sys.stderr)
-            print("  Record: %s"%rec, file=sys.stderr)
-            print("  Reason: %s"%e, file=sys.stderr)
+            _log.critical("** Failed to update account ** [%s] %s",
+                          str(rec), str(e))
+
             raise e
 
-    # now actually create the meta accounts
+    # note we need to actually create the meta accounts
     # what's in lexer.META at this point is a Group, not a MetaAccount
-    _m = {name:MetaAccount(name, lexer.META[name])
-          for name in lexer.META}
-
-    return {'Account':dict(lexer.ACCOUNTS), 'Group':dict(lexer.GROUPS),
-            'Meta':_m}
+    return {'Account':OrderedDict([(name, lexer.ACCOUNTS[name]) for name in sorted(lexer.ACCOUNTS)]),
+            'Group':OrderedDict([(name, lexer.GROUPS[name]) for name in sorted(lexer.GROUPS)]),
+            'Meta':OrderedDict([(name, MetaAccount(name, lexer.META[name])) for name in sorted(lexer.META)])}

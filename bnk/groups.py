@@ -1,8 +1,11 @@
 """Account groups and groupings"""
 
+import logging
 from bnk import account
 import datetime as dt
 import operator
+
+_log = logging.getLogger(__name__)
 
 class Group(object):
     """A group of related accounts, e.g., 'liquid' accounts or
@@ -35,15 +38,13 @@ class Group(object):
     def __eq__(self, other):
         try:
             if self._members != other._members:
-                print("My members:", self._members, "Other", other._members)
                 return False
             if self._name != other._name:
-                print("My name:", self._name, "Other", other._name)
                 return False
             return True
-        except Exception as E:
-            print("Exception", E)
-        print("!? false")
+        except Exception:
+            pass
+
         return False
 
 class MetaAccount(account.Account):
@@ -59,12 +60,15 @@ class MetaAccount(account.Account):
         contributors = [a[1] for a in openings]  # contribtors sorted by start date
         all_value_marks = set([v.t for v in contributors[0]._values])
 
+        _log.debug("Winnowing values for %s (initially %d)", name, len(all_value_marks))
         for act in contributors:
-            before_opening = {d for d in all_value_marks if d <= act._topen}
-            after_opening = all_value_marks - before_opening
-            after_opening.intersection_update({v.t for v in act._values})
-            all_value_marks = before_opening.union(after_opening)
+            while_open = {d for d in all_value_marks if act.is_open(d)}
+            while_closed = all_value_marks - while_open
 
+
+            while_open.intersection_update({v.t for v in act._values})
+            all_value_marks = while_open.union(while_closed)
+            _log.debug("  - after %s: %d", act.name, len(all_value_marks))
         # opening date will get a value from the account.Account.__init__, discard it here
         all_value_marks.discard(self._topen)
         value_marks_list = list(all_value_marks)
@@ -77,14 +81,12 @@ class MetaAccount(account.Account):
         for date in value_marks_list:
             v = 0.0
             for act in contributors:
+
                 if date > act._topen:
                     actv, msg = act.get_value(date)
                     v += actv
                 # otherwise, add 0...
-            #print("Marking",date, v)
+
             self.mark_value(account.Value(date, v))
 
         self._group = Group(name, contributors)
-
-        #print("Meta Account:", self._values)
-        #print("Meta Account:", self._transactions)

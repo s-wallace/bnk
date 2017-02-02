@@ -3,9 +3,10 @@ import io
 import datetime as dt
 import unittest
 from bnk import account
-from bnk import read_records
+from bnk import read_records, read_bnk_data
 from bnk.parse import NonZeroSumError
 from bnk.tests import WriteCSVs
+from bnk.tests import recstrings
 
 class AccountTest(unittest.TestCase):
 
@@ -42,11 +43,13 @@ class AccountTest(unittest.TestCase):
         self.assertTrue(math.isnan(a.get_value(dt.date(2012,10,1))[0]))
         self.assertEqual(a.get_value(dt.date(2012,10,1))[1], "No Data")
 
-        #a.carryvalues = dt.timedelta(days=400)
-        #self.assertEqual(a.get_value(dt.date(2012,10,1)), (200.0, "Carried"))
+        a.carryvalues = dt.timedelta(days=400)
+        self.assertEqual(a.get_value(dt.date(2012,10,1)),
+                         (200.0, "Carried",
+                          dt.date(2012,10,1)-dt.date(2012,1,30)))
 
-        #a.carryvalues = dt.timedelta(days=31)
-        #self.assertEqual(a.get_value(dt.date(2012,10,1))[1], "No Data")
+        a.carryvalues = dt.timedelta(days=31)
+        self.assertEqual(a.get_value(dt.date(2012,10,1))[1], "No Data")
 
         a = account.Account("test", dt.date(2011,12,30))
         a.mark_value(account.Value(dt.date(2012,10,31), 0))
@@ -110,6 +113,7 @@ class AccountTest(unittest.TestCase):
         self.assertEqual(performance['additions'], 400)
         self.assertEqual(performance['subtractions'], 0)
         self.assertEqual(performance['gain'], 100)
+        self.assertEqual(performance['carry'], 0)
 
     def test_parsesimple(self):
         recstr = """12-30-2001 open a
@@ -300,6 +304,42 @@ class AccountTest(unittest.TestCase):
         #print("--")
         #print(expectedcsv)
         self.assertEqual(expectedcsv, csv.getvalue())
+
+    def test_performance(self):
+        data = read_bnk_data(recstrings.a3t3b3b)
+
+        perf = {}
+        acctA = data['Account']['a']
+        acctA.get_performance(dt.date(2001,12,31), dt.date(2002,12,31), perf)
+        self.assertEqual(perf['carry'], 0)
+        self.assertEqual(perf['start date'], dt.date(2001,12,31))
+        self.assertEqual(perf['end date'], dt.date(2002,12,31))
+        self.assertEqual(perf['subtractions'], 100)
+
+        perf = {}
+        # There's no value marked on 2002-3-31, so this is a problem
+        self.assertRaises(ValueError, acctA.get_performance,
+                          dt.date(2001,12,31), dt.date(2002,3,31), perf)
+
+        # There's no value marked on 2002-6-30, so this is a problem
+        self.assertRaises(ValueError, acctA.get_performance,
+                          dt.date(2001,12,31), dt.date(2002,6,30), perf)
+
+        acctA.carryvalues = dt.timedelta(days=300)
+        # This will raise a ValueError since 2002-3-31 divides a transaction
+        self.assertRaises(ValueError, acctA.get_performance,
+                          dt.date(2001,12,31), dt.date(2002,3,31), perf)
+
+        # 6-30 is ok, since it doesn't divide transactions
+        acctA.get_performance(dt.date(2001,12,31), dt.date(2002,6,30), perf)
+        self.assertEqual(perf['carry'], 181)
+        self.assertEqual(perf['start date'], dt.date(2001,12,31))
+        self.assertEqual(perf['end date'], dt.date(2002,6,30))
+        self.assertEqual(perf['subtractions'], 100)
+        self.assertEqual(perf['start balance'], 100)
+        # and since we're carrying the balance from 12-31-2001 to 6-30-2002
+        self.assertEqual(perf['start balance'], perf['end balance'])
+
 
     def test_range(self):
 

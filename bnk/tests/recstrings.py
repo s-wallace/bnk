@@ -50,6 +50,41 @@ a3t3b3a = """12-30-2001 open a
            Assets 150
            """
 
+
+a3t3b3b = """12-30-2001 open a
+             12-30-2001 open b
+            01-01-1900 open Assets
+
+           from 12-31-2001 until 12-31-2001
+           ---
+           Assets -> a  200
+           Assets -> b  200
+
+           12-31-2001 balances
+           ---
+           a      100
+           b      200
+           Assets 100
+
+           from 01-01-2002 until 06-30-2002
+           ---
+           Assets -> a  -50
+
+           03-31-2002 balances
+           ---
+           b      250
+
+           from 04-01-2002 until 06-30-2002
+           ---
+           a  ->  b   50
+
+           12-31-2002 balances
+           ---
+           a      200
+           b      300
+           Assets 150
+           """
+
 a5t20b20a ="""
   09-01-2009 open a
   12-31-2010 open b
@@ -136,3 +171,32 @@ a5t20b20a ="""
   c 10400
   d 20400
   """
+
+readme = """
+  12-31-2000 open AlpineFund
+  12-31-2000 open BankFund
+  01-01-1900 open Assets
+
+  from 01-31-2001 until 01-31-2001
+  ---
+  Assets -> AlpineFund  200
+  Assets -> BankFund    200
+
+  12-31-2001 balances
+  ---
+  AlpineFund      220
+  BankFund        230
+
+  from 01-01-2002 until 12-31-2002
+  ---
+  Assets -> AlpineFund  -50
+
+  from 04-01-2002 until 06-30-2002
+  ---
+  AlpineFund  ->  BankFund   50
+
+  12-31-2002 balances
+  ---
+  AlpineFund      128
+  BankFund        290
+"""

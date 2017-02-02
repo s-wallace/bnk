@@ -117,6 +117,12 @@ class Table(object):
         assert len(footer) == self._cols
         self._footer = footer
 
+    def has_header(self):
+        return bool(self._header)
+
+    def has_footer(self):
+        return bool(self._footer)
+
     def content(self):
         t = []
         if self._header:
@@ -151,17 +157,43 @@ class StringView(object):
         return table
 
 
-def flatten_table(table, indent=0, banners=None, title=None, bannerchar='-'):
+def flatten_table(table, **args):
+    """Avaiable args:
+    indent      (int):
+    bannerchar  (1-char string):
+    title       (string)
+    headerstyle
+    """
+    if not 'banners' in args: args['banners'] = []
+    if not 'indent' in args: args['indent'] = 0
+    if not 'headerstyle' in args: args['headerstyle'] = '='
+    if not 'footerstyle' in args: args['footerstyle'] = '-'
+    if not 'bannerchar' in args: args['bannerchar'] = '-'
+    if not 'title' in args: args['title'] = ""
+
     content = table.content()
-    lines = [' '*indent + ''.join(c for c in row) for row in content]
+    lines = [' '*args['indent'] + ''.join(c for c in row) for row in content]
     maxlinelen = max(len(l) for l in lines)
-    if banners:
-        banners.sort()
+    banner = args['bannerchar']*maxlinelen
+
+    if table.has_header() and args['headerstyle']:
+        if args['headerstyle'] == '-': args['banners'].append(0)
+        elif args['headerstyle'] == '_': args['banners'].append(1)
+        elif args['headerstyle'] == '=': args['banners'].extend([0,1])
+
+    if table.has_footer() and args['footerstyle']:
+        if args['footerstyle'] == '-': args['banners'].append(len(lines)-1)
+        elif args['footerstyle'] == '_': args['banners'].append(len(lines))
+        elif args['footerstyle'] == '=':
+            args['banners'].extend([len(lines)-1,len(lines)])
+
+    if args['banners']:
+        args['banners'].sort()
         # from back to front
-        while banners:
-            bloc = banners.pop()
-            lines.insert(bloc, bannerchar*maxlinelen)
-    if title:
-        lines.insert(0, title)
+        while args['banners']:
+            bloc = args['banners'].pop()
+            lines.insert(bloc, banner)
+    if args['title']:
+        lines.insert(0, args['title'])
 
     return '\n'.join(lines)
