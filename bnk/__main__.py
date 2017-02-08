@@ -30,7 +30,6 @@ def main(args):
                         acts[actname].carryvalues = dt.timedelta(days=args.carry_forward)
                         if args.carry_last:
                             try:
-                                print("ASDHUHASUAD")
                                 acts[actname].carrylast(args.date)
                             except:
                                 pass

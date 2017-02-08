@@ -73,10 +73,12 @@ class CF(object):
         self.justify = justify
         self.width = width
 
-    def stringify(self, s):
+    def format(self, s):
         fmtstr = '{:'+self.justify+str(self.width)+"s}"
         return fmtstr.format(s)
 
+    def __repr__(self):
+        return '{:'+self.justify+str(self.width)+"s}"
 
 class Table(object):
     """A Table holds cells"""
@@ -115,8 +117,13 @@ class Table(object):
         return myv
 
     def set_row(self, rowi, value):
-        assert len(value) == self._cols
-        myrow = self._check_vector(value)
+        if isinstance(value, Table):
+            assert value._cols == self._cols
+            myrow = value
+        else:
+            assert len(value) == self._cols
+            myrow = self._check_vector(value)
+
         self._table[rowi] = myrow
 
     def set_column(self, coli, value):
@@ -133,9 +140,18 @@ class Table(object):
         for item in self._table[rowi]:
             yield item
 
-    def column(self, coli):
+    def column(self, coli, h=False, f=False, r=False):
+        if h and self.has_header():
+            yield self._header[coli]
         for row in self._table:
-            yield row[coli]
+            if isinstance(row, Table):
+                if r:
+                    for c in row.column(coli, h, f, r):
+                        yield c
+            else:
+                yield row[coli]
+        if f and self.has_footer():
+            yield self._footer[coli]
 
     def set_header(self, header):
         assert len(header) == self._cols
@@ -189,94 +205,3 @@ class StringView(object):
                      for row in content]
 
         return table
-
-
-def ascii_view(report, **args):
-    """Avaiable args:
-    indent      (int):
-    bannerchar  (1-char string):
-    title       (string)
-    headerstyle
-    """
-    if not 'banners' in args: args['banners'] = []
-    if not 'indent' in args: args['indent'] = 0
-    if not 'headerstyle' in args: args['headerstyle'] = '='
-    if not 'footerstyle' in args: args['footerstyle'] = '-'
-    if not 'bannerchar' in args: args['bannerchar'] = '-'
-    if not 'title' in args: args['title'] = ""
-
-    table = report.table
-    if table.has_header():
-        headerrow = table._header
-        fheader = [[h.stringify(hcell._s) for hcell, h in zip(headerrow, table.cf())]]
-    else:
-        fheader = []
-    if table.has_footer():
-        footerrow = table._footer
-        ffooter = [[f.stringify(fcell._s) for fcell, f, in zip(footerrow, table.cf())]]
-    else:
-        ffooter = []
-
-    known_metadata = {'min', 'max', 'carry'}
-
-    # first pass, look to see if we need space at left and right side
-    colannotations = []
-    for coli in range(table._cols):
-        lside = False
-        rside = False
-        for cell in table.column(coli):
-            if 'min' in cell.meta or 'max' in cell.meta:
-                lside = True
-            if 'carry' in cell.meta:
-                rside = True
-            for meta in cell.meta:
-                assert meta in known_metadata, \
-                    "ascii_view can't handle '%s'"%meta
-
-        colannotations.append((lside, rside))
-
-    # second pass, build strings
-    ftable = []
-    for row in table._table:
-        stringrow = []
-        for cann, cell, c in zip(colannotations, row, table.cf()):
-            stringrep = cell._s
-            if cann[0]:
-                if 'min' in cell.meta:
-                    stringrep = "v " + stringrep
-                if 'max' in cell.meta:
-                    stringrep = "^ " + stringrep
-            if cann[1]:
-                if 'carry' in cell.meta:
-                    stringrep = stringrep + "'"
-                else:
-                    stringrep = stringrep + " "
-            fmt = '{:'+c.justify+str(c.width)+"s}"
-            stringrow.append(fmt.format(stringrep))
-        ftable.append(stringrow)
-
-    lines = [' '*args['indent'] + ''.join(c for c in row) for row in fheader+ftable+ffooter]
-    maxlinelen = max(len(l) for l in lines)
-    banner = args['bannerchar']*maxlinelen
-
-    if table.has_header() and args['headerstyle']:
-        if args['headerstyle'] == '-': args['banners'].append(0)
-        elif args['headerstyle'] == '_': args['banners'].append(1)
-        elif args['headerstyle'] == '=': args['banners'].extend([0,1])
-
-    if table.has_footer() and args['footerstyle']:
-        if args['footerstyle'] == '-': args['banners'].append(len(lines)-1)
-        elif args['footerstyle'] == '_': args['banners'].append(len(lines))
-        elif args['footerstyle'] == '=':
-            args['banners'].extend([len(lines)-1,len(lines)])
-
-    if args['banners']:
-        args['banners'].sort()
-        # from back to front
-        while args['banners']:
-            bloc = args['banners'].pop()
-            lines.insert(bloc, banner)
-    if args['title']:
-        lines.insert(0, args['title'])
-
-    return '\n'.join(lines)

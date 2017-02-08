@@ -1,5 +1,6 @@
 import logging
 from bnk.tables import *
+from bnk.groups import Group
 import datetime as dt
 
 _log = logging.getLogger(__name__)
@@ -37,6 +38,75 @@ class PerfOverviewReport(object):
 
         self.table = table
 
+class NetWorthReport(object):
+    """NetWorthReport shows total value across accounts on set of dates"""
+
+    def __init__(self, accounts, dates, name="NetWorth Report"):
+        """Initialize the NetWorthReport:
+
+        Arguments:
+         accounts : a list of accounts and/or Groups to include in the report
+         dates : a list of dates on which the total value should be calculated
+        """
+
+        self.table = self._make_nw_table(accounts, dates)
+
+    def _make_nw_table(self, accounts, dates, depth=0):
+        """recursively build the networth table, a subtable is built
+        for each group."""
+
+        table = Table(len(accounts), len(dates)+1)
+
+        if not depth:
+            name = 'Accounts'
+        else:
+            name = accounts._name
+
+        header = [name] + ["{:%Y-%m-%d}".format(d) for d in dates]
+        table.set_header(header)
+
+        for (i, act) in enumerate(accounts):
+            if isinstance(act, Group):
+                row = self._make_nw_table(act, dates, depth+1)
+            else:
+                row = [act.name]
+                maxcarry = 0
+                for date in dates:
+                    try:
+                        perf = {}
+                        act.get_performance(date, date, perf)
+                        meta = {}
+                        if perf['carry'] > maxcarry:
+                            c = perf['carry']
+                            meta['carry'] = c
+                            if c > maxcarry:
+                                maxcarry = c
+                        row.append(Cell(perf['start balance'],
+                                        fmt="{: ,.2f}", meta=meta))
+
+                    except Exception as E:
+                        row.append(Cell(None, f=0, s='---'))
+                        _log.debug("Empty cell: %s %s -> %s", act.name, date, E)
+
+                if maxcarry:
+                    row[0] = act.name + " [c%d]"%(maxcarry)
+            table.set_row(i, row)
+
+        if depth == 0:
+            f = ['Total:']
+        else:
+            f = ['SubTotal:']
+
+        for columni in range(len(dates)):
+            # sum across all entries in the table/subtables
+            # ignore headers and footers
+            f.append(Cell(sum([c for c in
+                               table.column(columni+1, False, False, True)]),
+                          fmt='{: ,.2f}'))
+
+        table.set_footer(f)
+        table.set_column_formats( [CF('<', 30)] + [CF('>',15)]*len(dates) )
+        return table
 
 class BasicStatsReport(object):
 

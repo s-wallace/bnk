@@ -4,7 +4,7 @@ from bnk.tests import recstrings, samplereport
 from bnk import read_bnk_data
 from bnk.account import Period
 from bnk import reporting
-from bnk.tables import ascii_view
+from bnk.views import ascii_view
 import datetime as dt
 
 class _N(object):

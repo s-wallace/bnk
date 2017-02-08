@@ -1,7 +1,7 @@
 import datetime as dt
 from bnk import reporting
 from bnk.account import Period
-from bnk.tables import ascii_view
+from bnk.views import ascii_view
 from bnk.groups import MetaAccount
 from bnk import fiscalyear as fy
 from bnk import reporting
