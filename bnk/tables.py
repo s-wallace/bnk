@@ -1,7 +1,7 @@
 class Cell(object):
     """A table cell. Holds an object, meta data and string/float views"""
 
-    def __init__(self, obj, f=None, fmt=None, s=None):
+    def __init__(self, obj, f=None, fmt=None, s=None, meta=None):
         self._obj = obj
         if f is None:
             try:
@@ -16,7 +16,10 @@ class Cell(object):
         else:
             self.stringify(fmt)
 
-        self.meta = ""
+        if meta is None:
+            self.meta = {}
+        else:
+            self.meta = meta
 
     def object(self):
         return self._obj
@@ -64,6 +67,17 @@ class Cell(object):
     def __repr__(self):
         return "Cell(%s, f=%f, s=%s)"%(str(self._obj), self._f, self._s)
 
+class CF(object):
+    """Column Format"""
+    def __init__(self, justify='>', width=0):
+        self.justify = justify
+        self.width = width
+
+    def stringify(self, s):
+        fmtstr = '{:'+self.justify+str(self.width)+"s}"
+        return fmtstr.format(s)
+
+
 class Table(object):
     """A Table holds cells"""
 
@@ -89,17 +103,31 @@ class Table(object):
                     if cfmts[i]:
                         cell.restring(cfmts[i])
 
+    def _check_vector(self, value):
+        myv = []
+        for c in value:
+            if isinstance(c, str):
+                myv.append(Cell(c))
+            elif isinstance(c, Cell):
+                myv.append(c)
+            else:
+                raise ValueError("Table elements must be str or Cell")
+        return myv
+
     def set_row(self, rowi, value):
         assert len(value) == self._cols
-        self._table[rowi] = value
+        myrow = self._check_vector(value)
+        self._table[rowi] = myrow
 
     def set_column(self, coli, value):
         assert len(value) == self._rows
+        mycol = self._check_vector(value)
         for i, row in enumerate(self._table):
-            row[coli] = value[i]
+            row[coli] = mycol[i]
 
     def set_cell(self, rowi, colj, value):
-        self._table[rowi][colj] = value
+        myv = _check_vector([value])[0]
+        self._table[rowi][colj] = myv
 
     def row(self, rowi):
         for item in self._table[rowi]:
@@ -111,11 +139,11 @@ class Table(object):
 
     def set_header(self, header):
         assert len(header) == self._cols
-        self._header = header
+        self._header = self._check_vector(header)
 
     def set_footer(self, footer):
         assert len(footer) == self._cols
-        self._footer = footer
+        self._footer = self._check_vector(footer)
 
     def has_header(self):
         return bool(self._header)
@@ -123,7 +151,13 @@ class Table(object):
     def has_footer(self):
         return bool(self._footer)
 
-    def content(self):
+    def set_column_formats(self, cf):
+        self._cf = cf
+
+    def cf(self):
+        return self._cf
+
+    def xcontent(self):
         t = []
         if self._header:
             t.append(self._header)
@@ -157,7 +191,7 @@ class StringView(object):
         return table
 
 
-def flatten_table(table, **args):
+def ascii_view(report, **args):
     """Avaiable args:
     indent      (int):
     bannerchar  (1-char string):
@@ -171,8 +205,57 @@ def flatten_table(table, **args):
     if not 'bannerchar' in args: args['bannerchar'] = '-'
     if not 'title' in args: args['title'] = ""
 
-    content = table.content()
-    lines = [' '*args['indent'] + ''.join(c for c in row) for row in content]
+    table = report.table
+    if table.has_header():
+        headerrow = table._header
+        fheader = [[h.stringify(hcell._s) for hcell, h in zip(headerrow, table.cf())]]
+    else:
+        fheader = []
+    if table.has_footer():
+        footerrow = table._footer
+        ffooter = [[f.stringify(fcell._s) for fcell, f, in zip(footerrow, table.cf())]]
+    else:
+        ffooter = []
+
+    known_metadata = {'min', 'max', 'carry'}
+
+    # first pass, look to see if we need space at left and right side
+    colannotations = []
+    for coli in range(table._cols):
+        lside = False
+        rside = False
+        for cell in table.column(coli):
+            if 'min' in cell.meta or 'max' in cell.meta:
+                lside = True
+            if 'carry' in cell.meta:
+                rside = True
+            for meta in cell.meta:
+                assert meta in known_metadata, \
+                    "ascii_view can't handle '%s'"%meta
+
+        colannotations.append((lside, rside))
+
+    # second pass, build strings
+    ftable = []
+    for row in table._table:
+        stringrow = []
+        for cann, cell, c in zip(colannotations, row, table.cf()):
+            stringrep = cell._s
+            if cann[0]:
+                if 'min' in cell.meta:
+                    stringrep = "v " + stringrep
+                if 'max' in cell.meta:
+                    stringrep = "^ " + stringrep
+            if cann[1]:
+                if 'carry' in cell.meta:
+                    stringrep = stringrep + "'"
+                else:
+                    stringrep = stringrep + " "
+            fmt = '{:'+c.justify+str(c.width)+"s}"
+            stringrow.append(fmt.format(stringrep))
+        ftable.append(stringrow)
+
+    lines = [' '*args['indent'] + ''.join(c for c in row) for row in fheader+ftable+ffooter]
     maxlinelen = max(len(l) for l in lines)
     banner = args['bannerchar']*maxlinelen
 

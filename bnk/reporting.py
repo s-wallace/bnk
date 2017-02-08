@@ -26,32 +26,17 @@ class PerfOverviewReport(object):
                 cmax = max([c.object()[1] for c in table.column(i+1) if c.object()])
                 for cell in table.column(i+1):
                     if cell.object():
-                        if cell.object()[0] == cmin: cell.meta = 'min'
-                        if cell.object()[1] == cmax: cell.meta = 'max'
+                        if cell.object()[0] == cmin:
+                            cell.meta['min'] = True
+                        if cell.object()[1] == cmax:
+                            cell.meta['max'] = True
         except Exception as E:
             _log.debug("Couldn't find min/max")
 
-        self._table = table
-        self._periods = periods
+        table.set_column_formats( [CF('<', 30)] + [CF('>',20)]*len(periods) )
 
-    def has_footer(self):
-        return False
-    def has_header(self):
-        return True
+        self.table = table
 
-    def content(self):
-        def minmax(cell):
-            if cell.meta == "min": return "v " + cell._s
-            elif cell.meta == "max": return "^ " + cell._s
-            else: return cell._s
-
-        self._table.restring(cfmts=[None] + [minmax]*len(self._periods))
-
-        s = StringView(self._table,
-                       hfmts=['{:<30s}'] + ['{:>20s}']*len(self._periods),
-                       cfmts=['{:<30s}'] + ['{:>20s}']*len(self._periods))
-
-        return s.content()
 
 class BasicStatsReport(object):
 
@@ -68,11 +53,13 @@ class BasicStatsReport(object):
                 try:
                     perf = {}
                     act.get_performance(period.start, period.end, perf)
-                    c = perf['carry']
-                    if c > maxcarry:
-                        maxcarry = c
-                    row.append(Cell(perf[attribute],
-                                    fmt="{: ,.2f}'" if c else "{: ,.2f} "))
+                    meta = {}
+                    if perf['carry'] > maxcarry:
+                        c = perf['carry']
+                        meta['carry'] = c
+                        if c > maxcarry:
+                            maxcarry = c
+                    row.append(Cell(perf[attribute], fmt="{: ,.2f}", meta=meta))
 
                 except Exception as E:
                     row.append(Cell(None, f=0, s='---'))
@@ -81,26 +68,13 @@ class BasicStatsReport(object):
             if maxcarry:
                 row[0] = act.name + " [c%d]"%(maxcarry)
             table.set_row(i, row)
-        self._table = table
-        self._periods = periods
 
         f = ['Total:']
         for columni in range(len(periods)):
-            f.append(Cell(sum([c for c in self._table.column(columni+1)]), fmt='{: ,.2f} '))
-        self._table.set_footer(f)
-
-    def has_footer(self):
-        return True
-    def has_header(self):
-        return True
-
-    def content(self):
-
-        s = StringView(self._table,
-                       hfmts=['{:<30s}'] + ['{:>15s}']*len(self._periods),
-                       cfmts=['{:<30s}'] + ['{:>15s}']*len(self._periods))
-
-        return s.content()
+            f.append(Cell(sum([c for c in table.column(columni+1)]), fmt='{: ,.2f}'))
+        table.set_footer(f)
+        table.set_column_formats( [CF('<', 30)] + [CF('>',15)]*len(periods) )
+        self.table = table
 
 
 class DetailReport(object):
@@ -136,18 +110,5 @@ class DetailReport(object):
 
             table.set_row(i, row)
 
-        self._table = table
-        self._periods = periods
-
-    def has_footer(self):
-        return False
-    def has_header(self):
-        return True
-
-    def content(self):
-        print("Table width", self._table._cols)
-        s = StringView(self._table,
-                       hfmts=['{:<18s}']*8,
-                       cfmts=['{:<18s}']*8)
-
-        return s.content()
+        table.set_column_formats( [CF('<', 18)]*2+[CF('>', 18)]*6 )
+        self.table = table
