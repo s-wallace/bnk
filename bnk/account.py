@@ -69,6 +69,7 @@ class Account(object):
         # allow balances from a previously marked date
         # to be carried forward into the future (specified in days)
         self.carryvalues = None
+        self._cl = False
 
     def to_csv(self, stream):
         """Export to csv"""
@@ -243,13 +244,14 @@ class Account(object):
     def carrylast(self, todate):
         """Create a 'false' value mark at the specified date if necessary"""
 
-        if self.get_value(todate)[1] != 'Marked':
+        v = self.get_value(todate)
+        if v[1] == 'No Data' or v[1] == 'Carried':
             lastvalue = self._values[-1]
             if todate < lastvalue.t:
                 raise ValueError("Can't carry to specified date, it occurs before the last mark")
             self._values.append(Value(todate, lastvalue.value))
             self.name = self.name + " [cl%d]" %(todate - lastvalue.t).days
-
+            self._cl = (todate - lastvalue.t).days
 
     def get_value(self, t):
         """Determine the account value at time t

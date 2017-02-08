@@ -8,7 +8,7 @@ logging.config.fileConfig('logging.conf')
 
 from bnk import parse
 from bnk.parse import read_bnk_data
-from bnk.views import ascii_view
+from bnk.views import ascii_view, native_view
 
 def read_records(record_strings):
     return parse.read_bnk_data(record_strings)['Account']

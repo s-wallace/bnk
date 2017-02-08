@@ -1,5 +1,30 @@
 from bnk.tables import Table
 
+def native_view(report, **args):
+    """Native view: one cell per line showing the cell's full data"""
+    return _native_view_recursive(report.table, depth=0, **args)
+
+def _native_view_recursive(table, depth, **args):
+    data = []
+    if depth == 0 and 'title' in args:
+        data.append("Table: %s"%args['title'])
+
+    if table.has_header():
+        for i,cell in enumerate(table._header):
+            data.append("(Header, {:d}) {!r}".format(i, cell))
+    for i, row in enumerate(table._table):
+        if isinstance(row, Table):
+            data.append("({:d}, *) Begin Nested Table")
+            data.extend(self._native_view_recursive(row, depth+1, **args))
+            data.append("({:d}, *) End Nested Table")
+        else:
+            for j, cell in enumerate(row):
+                data.append("({:d}, {:d}) {!r}".format(i,j,cell))
+    if table.has_footer():
+        for i,cell in enumerate(table._footer):
+            data.append("(Footer, {:d}) {!r}".format(i,cell))
+    return "\n".join(data)
+
 def ascii_view(report, **args):
     """Avaiable args:
     indent      (int):

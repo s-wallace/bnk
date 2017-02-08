@@ -2,6 +2,7 @@ import io
 import datetime as dt
 import unittest
 from bnk import account
+from bnk import __main__ as main
 from bnk.__main__ import read_records
 from bnk.parse import NonZeroSumError, read_bnk_data
 from bnk.tests import recstrings
@@ -53,6 +54,14 @@ class GroupingTest(unittest.TestCase):
             with open('test_grouping-meta_simple-meta.csv', 'w') as fout:
                 m.to_csv(fout)
 
+    def test_acount_carry_last_meta(self):
+
+        args = main.parse_args('--carry-last --date 20021231 DUMMY_FILE'.split())
+        args.data = recstrings.a3t3b3c
+        args.report = "bnk.tests.test_grouping"
+        args.file = None  # need to kill this posthoc
+        data = main.main(args)
+
     def test_account_group_simple(self):
         accts = read_records(recstrings.a3t3b3a)
         perf = {}
@@ -94,3 +103,11 @@ class GroupingTest(unittest.TestCase):
         self.assertEqual(actb.get_value(dt.date(2001,12,31))[1], "Marked")
         self.assertEqual(actb.get_value(dt.date(2002,12,31))[1], "Marked")
         self.assertEqual(actb.get_value(dt.date(2002,3,31))[1], "Marked")
+
+def report(args, accounts):
+    perf = {}
+    v = accounts['Meta']['ab'].get_value(dt.date(2002,12,31))
+    assert accounts['Meta']['ab'].name == 'ab [cl92]', \
+        "Carrylast didn't set meta-account name"
+    assert v == (490.0, 'Marked'), \
+        "Carrylast didn't work as expected with meta-account"

@@ -310,7 +310,7 @@ import ply.yacc as yacc
 parser = yacc.yacc()
 
 
-def read_bnk_data(record_string):
+def read_bnk_data(record_string, carry_last=False, to_date=None):
     """Read records
 
     Arguments:
@@ -338,8 +338,31 @@ def read_bnk_data(record_string):
 
             raise e
 
+    if carry_last:
+        assert isinstance(to_date, dt.date)
+        for a in lexer.ACCOUNTS:
+            try:
+                lexer.ACCOUNTS[a].carrylast(to_date)
+            except:
+                pass
+
     # note we need to actually create the meta accounts
     # what's in lexer.META at this point is a Group, not a MetaAccount
+    # we don't
+    meta = OrderedDict([(name, MetaAccount(name, lexer.META[name])) for name in sorted(lexer.META)])
+
+    if carry_last:
+        # change the name of meta accounts to update their 'carrylast status', note that
+        # we don't actually call carrylast on the metaaccount, since value is
+        # propigated automagically via the childen
+        for m in meta:
+            cl = 0
+            for account in meta[m]._group:
+                if account._cl:
+                    cl = max(cl, account._cl)
+            if cl > 0:
+                meta[m].name = meta[m].name + " [cl%d]"%cl
+
     return {'Account':OrderedDict([(name, lexer.ACCOUNTS[name]) for name in sorted(lexer.ACCOUNTS)]),
             'Group':OrderedDict([(name, lexer.GROUPS[name]) for name in sorted(lexer.GROUPS)]),
-            'Meta':OrderedDict([(name, MetaAccount(name, lexer.META[name])) for name in sorted(lexer.META)])}
+           'Meta':meta}

@@ -85,6 +85,50 @@ a3t3b3b = """12-30-2001 open a
            Assets 150
            """
 
+a3t3b3c = """12-30-2001 open a
+             12-30-2001 open b
+            01-01-1900 open Assets
+
+           meta ab -> (a b)
+
+           from 12-31-2001 until 12-31-2001
+           ---
+           Assets -> a  200
+           Assets -> b  200
+
+           12-31-2001 balances
+           ---
+           a      100
+           b      200
+           Assets 100
+
+           from 01-01-2002 until 06-30-2002
+           ---
+           Assets -> a  -50
+
+           03-31-2002 balances
+           ---
+           b      250
+
+           from 04-01-2002 until 06-30-2002
+           ---
+           a  ->  b   50
+
+           06-30-2002 balances
+           ---
+           a     180
+           b     280
+
+           09-30-2002 balances
+           ---
+           a     190
+
+           12-31-2002 balances
+           ---
+           b      300
+           Assets 150
+           """
+
 a5t20b20a ="""
   09-01-2009 open a
   12-31-2010 open b

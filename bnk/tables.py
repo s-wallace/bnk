@@ -65,7 +65,8 @@ class Cell(object):
         return fmtstr.format(self._s)
 
     def __repr__(self):
-        return "Cell(%s, f=%f, s=%s)"%(str(self._obj), self._f, self._s)
+        sortedmeta = ['%s:%s'%(i[0],i[1]) for i in sorted(self.meta.items())]
+        return "Cell(%s, f=%f, s='%s' meta={%s})"%(str(self._obj), self._f, self._s, ','.join(sortedmeta))
 
 class CF(object):
     """Column Format"""
