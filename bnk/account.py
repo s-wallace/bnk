@@ -2,6 +2,7 @@
 Financial reports with incomplete information
 """
 
+import logging
 import operator
 import datetime as dt
 import bisect
@@ -9,6 +10,8 @@ import logging
 import collections
 import csv
 from decimal import Decimal
+
+_log = logging.getLogger(__name__)
 
 class Account(object):
     """An Account is a black box with transactions and point values.
@@ -168,6 +171,14 @@ class Account(object):
 
     def mark_value(self, value):
         """Mark the account's value at a specific moment in time"""
+
+        if value.t == self._topen and value.value == 0.0:
+            _log.warning("Account marks a 0.0 balance on opening date. This is depreciated")
+            return
+
+        if value.t == self._tclose and value.value == 0.0:
+            _log.warning("Account marks a 0.0 balance on closing date. This is depreciated")
+            return
 
         self._check_time((value.t, value.t))
 
