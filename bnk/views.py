@@ -1,4 +1,31 @@
+import sys
 from bnk.tables import Table
+
+class NativeView(object):
+
+    def __init__(self, stream=sys.stdout, buffer=False):
+        self.buffer = buffer
+        self._bcontent = []
+        self.stream = stream
+        self.between_report = "\n\n"
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if not self.buffer:
+            print("\n".join(self._bcontent), file=self.stream)
+            self._bcontent = []
+
+    def append(self, report, **args):
+        content = _native_view_recursive(report.table, depth=0, **args)
+        if self.buffer:
+            self._bcontent.append(content)
+            self._bcontent.append(self.between_report)
+        else:
+            print(content, file=self.stream)
+            print(self.between_report, file=self.stream)
+
 
 def native_view(report, **args):
     """Native view: one cell per line showing the cell's full data"""
@@ -25,6 +52,18 @@ def _native_view_recursive(table, depth, **args):
             data.append("(Footer, {:d}) {!r}".format(i,cell))
     return "\n".join(data)
 
+class AsciiView(NativeView):
+
+    def append(self, report, **args):
+        content = _ascii_view_recursive(report.table, depth=0, **args)
+        if self.buffer:
+            self._bcontent.append(content)
+            self._bcontent.append(self.between_report)
+        else:
+            print(content, file=self.stream)
+            print(self.between_report)
+
+
 def ascii_view(report, **args):
     """Avaiable args:
     indent      (int):
@@ -35,7 +74,7 @@ def ascii_view(report, **args):
     bodystyle : one char per nested level of table, see formats below
 
     header/footer styles:
-    ' ' : supress header/footer
+    '0' : supress header/footer
     '=' : border above and below
     '-' : border above
     '_' : border below
@@ -56,6 +95,9 @@ def _ascii_view_recursive(table, depth=0, c_annotes=None, **args):
     if not 'bodystyle' in args: args['bodystyle'] = ' >'
     if not 'bannerchar' in args: args['bannerchar'] = '-'
     if not 'title' in args: args['title'] = ""
+    if not 'minstr' in args: args['minstr'] = '- '
+    if not 'maxstr' in args: args['maxstr'] = '+ '
+
     banners = []
 
 
@@ -82,12 +124,12 @@ def _ascii_view_recursive(table, depth=0, c_annotes=None, **args):
     # build header/footer strings
     fheader = []
     ffooter = []
-    if table.has_header() and not args['headerstyle'].startswith(' '):
+    if table.has_header() and not args['headerstyle'].startswith('0'):
         # format the cell's string adding space at the end if necessary
         fheader = [[hfmt.format(hcell._s + (' ' if colannote[1] else ''))
                     for hcell, hfmt, colannote in
                     zip(table._header, table.cf(), c_annotes)]]
-    if table.has_footer() and not args['footerstyle'].startswith(' '):
+    if table.has_footer() and not args['footerstyle'].startswith('0'):
         ffooter = [[ffmt.format(fcell._s + (' ' if colannote[1] else ''))
                     for fcell, ffmt, colannote in
                     zip(table._footer, table.cf(), c_annotes)]]
@@ -111,9 +153,9 @@ def _ascii_view_recursive(table, depth=0, c_annotes=None, **args):
             stringrep = cell._s
             if colannote[0]:
                 if 'min' in cell.meta:
-                    stringrep = "v " + stringrep
+                    stringrep = args['minstr'] + stringrep
                 if 'max' in cell.meta:
-                    stringrep = "^ " + stringrep
+                    stringrep = args['maxstr'] + stringrep
             if colannote[1]:
                 if 'carry' in cell.meta:
                     stringrep = stringrep + "'"
