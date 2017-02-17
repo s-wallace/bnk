@@ -84,7 +84,7 @@ class CF(object):
 class Table(object):
     """A Table holds cells"""
 
-    def __init__(self, rows, cols):
+    def __init__(self, rows, cols, growable=False):
         self._table = []
         for r in range(rows):
             self._table.append([None]*cols)
@@ -94,6 +94,15 @@ class Table(object):
         self._header = None
         self._rows = rows
         self._cols = cols
+        self._growable = growable
+
+    def addrow(self):
+        if not self._growable:
+            return False
+
+        self._rows += 1
+        self._table.append([None]*self._cols)
+        return True
 
     def restring(self, cfmts=None):
         """Restring the table's columns using the specified function on
@@ -134,7 +143,7 @@ class Table(object):
             row[coli] = mycol[i]
 
     def set_cell(self, rowi, colj, value):
-        myv = _check_vector([value])[0]
+        myv = self._check_vector([value])[0]
         self._table[rowi][colj] = myv
 
     def row(self, rowi):
