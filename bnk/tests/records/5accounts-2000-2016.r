@@ -4,6 +4,12 @@
 09-13-2004 open DogFund
 12-31-1999 open Eatin
 
+group Investments -> ( Abracadabra BoogyTime CatsRUs DogFund Eatin )
+
+group R_networth -> ( Abracadabra BoogyTime CatsRUs DogFund Eatin )
+group R_basicstats -> ( Abracadabra BoogyTime CatsRUs DogFund Eatin )
+group R_performance -> ( Abracadabra BoogyTime CatsRUs DogFund Eatin )
+group R_detail -> ( Abracadabra BoogyTime CatsRUs )
 
 03-31-2000 balances
 ---
