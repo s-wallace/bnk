@@ -1,0 +1,22 @@
+[flake8]
+exclude = bnk/parsetab.py,bnk/parser.out,__pycache__
+
+# TODO: think about removing F811 from below...
+ignore = D105,F811,D202
+putty-ignore =
+    # logging needs to be setup prior to local imports, so don't force
+    #   imports to live at the top of the file (E402)
+    # ignore unused imports in __init__ (F401)
+    */__init__.py : +E402,F401
+
+    # whitespace around arithmetic operator (consider making this a global ignore)
+    bnk/reporting.py : +E226
+    
+    # parse.py obeys its own conventions.... so..
+    # Don't force docstrings:
+    # triple quotes, 1st line ends with ., imperative, capitalization
+    # Don't force function names: to be lower case 
+    bnk/parse.py : +D300,D400,D401,D403,N802
+    
+    # Empty __init__ doesn't need argument description
+    /def __init__\(self\)/ : +D102

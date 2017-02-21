@@ -103,3 +103,21 @@ BankFund                                10.00          30.00          40.00
 ---------------------------------------------------------------------------
 Total:                                  18.00          50.00          68.00
 ```
+
+## Reports
+
+Reports are used to obtain information from the bnk records file. The following
+reports are currently available:
+
+* Networth report (indicates account balances on specified dates and provides
+a total value for those dates)
+* Gain report (indicates the change in account value across specified periods
+that is not attributable to additions or subtractions)
+* Additions report (indicates the additions made to the account across specified
+periods)
+* Subtractions report (indicates the subtractions made to the account across specified
+periods)
+* Perfomance report (indicates the internal rate of return on the account for the
+specified period given known additions and subtractions)
+* Detail report (provides details for multiple time periods on a *single* account;
+most reports provide one piece of data for mutiple accounts)

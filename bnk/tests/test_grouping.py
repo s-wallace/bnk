@@ -1,48 +1,52 @@
-import io
+"""Tests for bnk.groups module."""
+
 import datetime as dt
 import unittest
-from bnk import account
-from bnk import __main__ as main
-from bnk.__main__ import read_records
-from bnk.parse import NonZeroSumError, read_bnk_data
+from bnk.parse import read_bnk_data
 from bnk.tests import recstrings
 from bnk.tests import WriteCSVs
 from bnk import groups
 
 
 class GroupingTest(unittest.TestCase):
+    """Test cases for bnk.groups module."""
 
-    def test_account_meta_simple(self):
+    def test_group_meta_simple(self):
+        """Verify metrics for meta accounts.
 
-        accts = read_records(recstrings.a3t3b3a)
-        perf = {}
-        accts['a'].get_performance(None, None, perf)
-        self.assertEqual(perf['additions'], 200)
-        self.assertEqual(perf['subtractions'], 100)
-        self.assertEqual(perf['gain'], 100)
-        irounded = (round(perf['irr'][0],3), round(perf['irr'][1], 3))
+        Metrics for meta accounts should correspond to metrics
+        for contributing accounts.
+        """
+        accts = read_bnk_data(recstrings.a3t3b3a)['Account']
+        aperf = {}
+        accts['a'].get_performance(None, None, aperf)
+        self.assertEqual(aperf['additions'], 200)
+        self.assertEqual(aperf['subtractions'], 100)
+        self.assertEqual(aperf['gain'], 100)
+        irounded = (round(aperf['irr'][0], 3), round(aperf['irr'][1], 3))
         # Using XIRR in LibreOffice
         self.assertEqual(irounded, (56.314, 86.433))
 
-        perf = {}
-        accts['b'].get_performance(None, None, perf)
-        self.assertEqual(perf['additions'], 250)
-        self.assertEqual(perf['subtractions'], 0)
-        self.assertEqual(perf['gain'], 50)
-        irounded = (round(perf['irr'][0],3), round(perf['irr'][1], 3))
+        bperf = {}
+        accts['b'].get_performance(None, None, bperf)
+        self.assertEqual(bperf['additions'], 250)
+        self.assertEqual(bperf['subtractions'], 0)
+        self.assertEqual(bperf['gain'], 50)
+        irounded = (round(bperf['irr'][0], 3), round(bperf['irr'][1], 3))
         # Using XIRR in LibreOffice
         self.assertEqual(irounded, (21.131, 22.327))
 
         m = groups.MetaAccount('meta', [accts['a'], accts['b']])
-        perf = {}
-        m.get_performance(None, None, perf)
-        self.assertEqual(perf['gain'], 150.0)
-        self.assertEqual(perf['additions'], 450)
-        self.assertEqual(perf['subtractions'], 100)
-        irounded = (round(perf['irr'][0],3), round(perf['irr'][1], 3))
+        mperf = {}
+        m.get_performance(None, None, mperf)
+        for k in ['gain', 'additions', 'subtractions']:
+            self.assertEqual(mperf[k], aperf[k] + bperf[k])
+
+        # it's not as simple to figure out the performance, so
+        # we need to do that in LibreOffice
+        irounded = (round(mperf['irr'][0], 3), round(mperf['irr'][1], 3))
         # Using XIRR in LibreOffice
         self.assertEqual(irounded, (36.339, 44.469))
-
 
         if WriteCSVs:
             with open('test_grouping-meta_simple-a.csv', 'w') as fout:
@@ -54,26 +58,17 @@ class GroupingTest(unittest.TestCase):
             with open('test_grouping-meta_simple-meta.csv', 'w') as fout:
                 m.to_csv(fout)
 
-    def test_acount_carry_last_meta(self):
+    def test_group_creation(self):
+        """Verify groups/meta-accounts created via code/parser are equal."""
 
-        args = main.parse_args('--carry-last --date 20021231 DUMMY_FILE'.split())
-        args.data = recstrings.a3t3b3c
-        args.report = "bnk.tests.test_grouping"
-        args.file = None  # need to kill this posthoc
-        data = main.main(args)
-
-    def test_account_group_simple(self):
-        accts = read_records(recstrings.a3t3b3a)
-        perf = {}
-
-
+        # it should be equivilant to make the group via parser, or in code
         s = recstrings.a3t3b3b + "\ngroup ab -> (a b)\n"
         bnkdata = read_bnk_data(s)
         group = groups.Group('ab', [bnkdata['Account']['a'],
                                     bnkdata['Account']['b']])
         self.assertEqual(group, bnkdata['Group']['ab'])
 
-        # try a meta account
+        # it should be equivilant to make a meta-account via parser, or in code
         s2 = recstrings.a3t3b3b + "\nmeta ab -> (a b)\n"
         bnkdata = read_bnk_data(s2)
         meta = groups.MetaAccount('ab', [bnkdata['Account']['a'],
@@ -82,8 +77,8 @@ class GroupingTest(unittest.TestCase):
         self.assertEqual(meta._transactions,
                          bnkdata['Meta']['ab']._transactions)
 
-
-        # it should be ok to put the meta statement after the openings
+        # it should be ok to put the meta statement after accounts are
+        # opened, whereas above we did it at the end of the file
         lines = recstrings.a3t3b3b.splitlines()
         lines.insert(3, "\nmeta ab -> (a b)\n")
         bnkdata = read_bnk_data("\n".join(lines))
@@ -93,21 +88,21 @@ class GroupingTest(unittest.TestCase):
         self.assertEqual(meta._transactions,
                          mab._transactions)
 
+    def test_meta_value_marks(self):
+        """Verify that meta account marks values appropriately."""
+
+        lines = recstrings.a3t3b3b.splitlines()
+        lines.insert(3, "\nmeta ab -> (a b)\n")
+        bnkdata = read_bnk_data("\n".join(lines))
+        mab = bnkdata['Meta']['ab']
+
         # the meta account should have marked values at two places
-        self.assertEqual(mab.get_value(dt.date(2001,12,31))[1], "Marked")
-        self.assertEqual(mab.get_value(dt.date(2002,12,31))[1], "Marked")
-        self.assertEqual(mab.get_value(dt.date(2002,3,31))[1], "No Data")
+        self.assertEqual(mab.get_value(dt.date(2001, 12, 31))[1], "Marked")
+        self.assertEqual(mab.get_value(dt.date(2002, 12, 31))[1], "Marked")
+        self.assertEqual(mab.get_value(dt.date(2002, 3, 31))[1], "No Data")
 
         actb = bnkdata['Account']['b']
         # account b should have marked balues at three places
-        self.assertEqual(actb.get_value(dt.date(2001,12,31))[1], "Marked")
-        self.assertEqual(actb.get_value(dt.date(2002,12,31))[1], "Marked")
-        self.assertEqual(actb.get_value(dt.date(2002,3,31))[1], "Marked")
-
-def report(args, accounts):
-    perf = {}
-    v = accounts['Meta']['ab'].get_value(dt.date(2002,12,31))
-    assert accounts['Meta']['ab'].name == 'ab [cl92]', \
-        "Carrylast didn't set meta-account name"
-    assert v == (490.0, 'Marked'), \
-        "Carrylast didn't work as expected with meta-account"
+        self.assertEqual(actb.get_value(dt.date(2001, 12, 31))[1], "Marked")
+        self.assertEqual(actb.get_value(dt.date(2002, 12, 31))[1], "Marked")
+        self.assertEqual(actb.get_value(dt.date(2002, 3, 31))[1], "Marked")

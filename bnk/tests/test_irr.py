@@ -1,60 +1,16 @@
-import io
+"""Tests for bnk.account.Account.get_irr() method."""
+
 import datetime as dt
 import unittest
-from bnk import account
-from bnk.__main__ import read_records
-from bnk.parse import NonZeroSumError
+from bnk import read_bnk_data
 from bnk.tests import WriteCSVs
 
+
 class AccountIRRTest(unittest.TestCase):
-    def test_irr_simple(self):
-        r = """12-30-2000 open a
-               12-30-2000 open b
+    """Test cases for bnk.account.Account.get_irr() method."""
 
-               12-31-2000 balances
-               ---
-               a 0
-               b 100
-
-               from 01-01-2002 until 01-01-2002
-               ---
-               b -> a  12340000
-
-               from 12-31-2002 until 12-31-2002
-               ---
-               a -> b  3620000
-
-               01-01-2003 balances
-               ---
-               a 0 // this doesn't make a lot of sense, but is ok for the computations below
-
-               from 12-31-2003 until 12-31-2003
-               ---
-               a -> b  5480000
-
-               01-01-2004 balances
-               ---
-               a 0 // this doesn't make a lot of sense, but is ok for the computations below
-
-               from 12-31-2004 until 12-31-2004
-               ---
-               a -> b  4810000
-
-               01-01-2005 balances
-               ---
-               a  0
-
-               01-02-2005 close a"""
-        accts = read_records(r)
-        if WriteCSVs:
-            with open('test_irr-test_irr_simple-1-a.csv', 'w') as fout:
-                accts['a'].to_csv(fout)
-        irr = accts['a'].get_irr(dt.date(2000,12,31), dt.date(2005,1,1))
-        irounded = (round(irr[0],3), round(irr[1], 3))
-        # Using XIRR in LibreOffice
-        self.assertEqual(irounded, (5.967, 5.967))
-
-
+    def test_irr_wide_windows(self):
+        """Test Account.get_irr() with wide transaction windows."""
 
         r = """12-30-2000 open a
                12-30-2000 open b
@@ -76,17 +32,19 @@ class AccountIRRTest(unittest.TestCase):
                ---
                a 175000
         """
-        accts = read_records(r)
+        accts = read_bnk_data(r)['Account']
         if WriteCSVs:
-            with open('test_irr-test_irr_simple-2-a.csv', 'w') as fout:
+            with open('test_irr-test_irr_wide_windows-1-a.csv', 'w') as fout:
                 accts['a'].to_csv(fout)
 
-        irr = accts['a'].get_irr(dt.date(2000,12,31), dt.date(2002,12,31))
-        irounded = (round(irr[0],3), round(irr[1], 3))
+        irr = accts['a'].get_irr(dt.date(2000, 12, 31), dt.date(2002, 12, 31))
+        irounded = (round(irr[0], 3), round(irr[1], 3))
         # Using XIRR in LibreOffice
         self.assertEqual(irounded, (16.716, 20.201))
 
     def test_irr_exact_timing(self):
+        """Test Account.get_irr() with narrow transaction windows."""
+
         r = """12-30-2009 open a
                12-30-2000 open Assets
 
@@ -102,9 +60,9 @@ class AccountIRRTest(unittest.TestCase):
                ---
                a 160000
         """
-        accts = read_records(r)
-        irr = accts['a'].get_irr(dt.date(2009,12,31), dt.date(2010,12,31))
-        irounded = (round(irr[0],5), round(irr[1], 5))
+        accts = read_bnk_data(r)['Account']
+        irr = accts['a'].get_irr(dt.date(2009, 12, 31), dt.date(2010, 12, 31))
+        irounded = (round(irr[0], 5), round(irr[1], 5))
         # Using XIRR in LibreOffice (TEST 1)
         #  in test_irr_test_irr_exact_timing_1-3.ods
         self.assertEqual(irounded, (10.0, 10.0))
@@ -120,9 +78,9 @@ class AccountIRRTest(unittest.TestCase):
                ---
                a 110000
         """
-        accts = read_records(r)
-        irr = accts['a'].get_irr(dt.date(2009,12,31), dt.date(2010,12,31))
-        irounded = (round(irr[0],5), round(irr[1], 5))
+        accts = read_bnk_data(r)['Account']
+        irr = accts['a'].get_irr(dt.date(2009, 12, 31), dt.date(2010, 12, 31))
+        irounded = (round(irr[0], 5), round(irr[1], 5))
         # Using XIRR in LibreOffice (TEST 2)
         #  in test_irr_test_irr_exact_timing_1-3.ods
         self.assertEqual(irounded, (10.0, 10.0))
@@ -142,9 +100,9 @@ class AccountIRRTest(unittest.TestCase):
                ---
                a 160000
         """
-        accts = read_records(r)
-        irr = accts['a'].get_irr(dt.date(2009,12,31), dt.date(2010,12,31))
-        irounded = (round(irr[0],5), round(irr[1], 5))
+        accts = read_bnk_data(r)['Account']
+        irr = accts['a'].get_irr(dt.date(2009, 12, 31), dt.date(2010, 12, 31))
+        irounded = (round(irr[0], 5), round(irr[1], 5))
         # Using XIRR in LibreOffice (TEST 3)
         #  in test_irr_test_irr_exact_timing_1-3.ods
         self.assertEqual(irounded, (9.98696, 9.98696))
@@ -164,15 +122,54 @@ class AccountIRRTest(unittest.TestCase):
                ---
                a 160000
         """
-        accts = read_records(r)
-        irr = accts['a'].get_irr(dt.date(2009,12,31), dt.date(2010,12,31))
-        irounded = (round(irr[0],5), round(irr[1], 5))
+        accts = read_bnk_data(r)['Account']
+        irr = accts['a'].get_irr(dt.date(2009, 12, 31), dt.date(2010, 12, 31))
+        irounded = (round(irr[0], 5), round(irr[1], 5))
         # Using XIRR in LibreOffice (combined tests 1 and 3)
         #  in test_irr_test_irr_exact_timing_1-3.ods
         self.assertEqual(irounded, (9.98696, 10))
 
+        r = """12-30-2000 open a
+               12-30-2000 open b
+
+               12-31-2000 balances
+               ---
+               a 0
+               b 100
+
+               from 01-01-2002 until 01-01-2002
+               ---
+               b -> a  12340000
+
+               from 12-31-2002 until 12-31-2002
+               ---
+               a -> b  3620000
+
+               from 12-31-2003 until 12-31-2003
+               ---
+               a -> b  5480000
+
+               from 12-31-2004 until 12-31-2004
+               ---
+               a -> b  4810000
+
+               01-01-2005 balances
+               ---
+               a  0
+
+               01-02-2005 close a"""
+        accts = read_bnk_data(r)['Account']
+        if WriteCSVs:
+            with open('test_irr-test_irr_exact_timing-1-4.csv', 'w') as fout:
+                accts['a'].to_csv(fout)
+        irr = accts['a'].get_irr(dt.date(2000, 12, 31), dt.date(2005, 1, 1))
+        irounded = (round(irr[0], 3), round(irr[1], 3))
+        # Using XIRR in LibreOffice
+        self.assertEqual(irounded, (5.967, 5.967))
 
     def test_irr_with_overlap(self):
+        """Test Account.get_irr() when transaction windows overlap."""
+
         r = """12-30-2000 open a
                12-30-2000 open b
 
@@ -201,18 +198,18 @@ class AccountIRRTest(unittest.TestCase):
                ---
                a  175000
         """
-        accts = read_records(r)
+        accts = read_bnk_data(r)['Account']
         if WriteCSVs:
             with open('test_irr-test_irr_with_overlap-1-a.csv', 'w') as fout:
                 accts['a'].to_csv(fout)
 
-        irr = accts['a'].get_irr(dt.date(2000,12,31), dt.date(2002,12,31))
-        irounded = (round(irr[0],3), round(irr[1], 3))
+        irr = accts['a'].get_irr(dt.date(2000, 12, 31), dt.date(2002, 12, 31))
+        irounded = (round(irr[0], 3), round(irr[1], 3))
         # Using XIRR in LibreOffice (TEST 1)
         self.assertEqual(irounded, (18.34, 25.828))
 
-        irr = accts['a'].get_irr(dt.date(2000,12,31), dt.date(2002,6,30))
-        irounded = (round(irr[0],3), round(irr[1], 3))
+        irr = accts['a'].get_irr(dt.date(2000, 12, 31), dt.date(2002, 6, 30))
+        irounded = (round(irr[0], 3), round(irr[1], 3))
         # Using XIRR in LibreOffice (TEST 2)
         self.assertEqual(irounded, (-76.272, -41.99))
 

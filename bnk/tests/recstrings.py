@@ -1,3 +1,6 @@
+"""Record-strings for testing bnk functionality."""
+
+
 a2t2b2a = """12-30-2001 open a
            01-01-1900 open Assets
 
@@ -129,7 +132,7 @@ a3t3b3c = """12-30-2001 open a
            Assets 150
            """
 
-a5t20b20a ="""
+a5t20b20a = """
   09-01-2009 open a
   12-31-2010 open b
   12-31-2010 open c
