@@ -145,7 +145,7 @@ def is_new_name(name):
     return True
 
 
-def build_record(account, r, date, lineno):
+def build_record(account, r, date, lineno, t):
     """Build a record for a specific account.
 
     Args:
@@ -154,12 +154,21 @@ def build_record(account, r, date, lineno):
       date    - the date associated with the record
       lineno  - the linenumber where the record was found
     """
+    global _ErrorToken
     if account not in _lexer.ACCOUNTS:
-        _log.warning("No Opening Date for account '%s' (line: %d)",
-                     account, lineno)
+        if _lexer.strict:
+            _log.critical("No Opening Date for account '%s' (line: %d)",
+                          account, lineno)
+            _ErrorToken = t
+            raise LookupError(t)
 
-        _lexer.ACCOUNTS[account] = Account(account,
-                                           dt.date.min + dt.timedelta(days=1))
+        else:
+
+            _log.warning("No Opening Date for account '%s' (line: %d)",
+                         account, lineno)
+
+            _lexer.ACCOUNTS[account] = Account(account, dt.date.min +
+                                               dt.timedelta(days=1))
 
     return Record(account, r, date, lineno)
 
@@ -179,7 +188,8 @@ def p_statements_null(t):
 def p_statement_transactions(t):
     'statement : daterange SEP transactions'
     items = [build_record(act,
-                          Transaction(t[1][0], t[1][1], amt), t[1][0], lineno)
+                          Transaction(t[1][0], t[1][1], amt),
+                          t[1][0], lineno, t)
              for (act, amt, lineno) in t[3]]
 
     amts = sum([i.record().amount for i in items])
@@ -193,31 +203,31 @@ def p_statement_datespec_balances(t):
     'statement : DATEMDY BALANCES SEP balances'
     t[0] = []
     for (act, val, lineno) in t[4]:
-        t[0].append(build_record(act, Value(t[1], val), t[1], lineno))
+        t[0].append(build_record(act, Value(t[1], val), t[1], lineno, t))
 
 
 def p_statement_oneline_balance(t):
     'statement : DATEMDY ID NUMBER'
     t[0] = [build_record(t[2],
-                         Value(t[1], t[3]), t[1], t.lineno(3))]
+                         Value(t[1], t[3]), t[1], t.lineno(3), t)]
 
 
 def p_statement_oneline_transaction(t):
     'statement : daterange ID R_ARROW ID NUMBER'
     t[0] = []
     t[0].append(build_record(t[2], Transaction(t[1][0], t[1][1], -t[5]),
-                             t[1][0], t.lineno(5)))
+                             t[1][0], t.lineno(5), t))
     t[0].append(build_record(t[4], Transaction(t[1][0], t[1][1], t[5]),
-                             t[1][0], t.lineno(5)))
+                             t[1][0], t.lineno(5), t))
 
 
 def p_statement_oneline_transaction_single_date(t):
     'statement : DATEMDY ID R_ARROW ID NUMBER'
     t[0] = []
     t[0].append(build_record(t[2], Transaction(t[1], t[1], -t[5]),
-                             t[1], t.lineno(5)))
+                             t[1], t.lineno(5), t))
     t[0].append(build_record(t[4], Transaction(t[1], t[1], t[5]),
-                             t[1], t.lineno(5)))
+                             t[1], t.lineno(5), t))
 
 
 def make_account(name, opening, lineno):
@@ -367,6 +377,7 @@ def p_error(t):  # No doc string for this p_ function  noqa: D103
     # get the line of data:
     line = _lexer.lexdata.splitlines()[t.lexer.lineno]
 
+    _log.critical("In p_error!")
     s = SyntaxError("Unexpected token: '%s' on line %d '%s'" % (t.value,
                                                                 t.lexer.lineno,
                                                                 line))
@@ -379,23 +390,27 @@ _parser = yacc.yacc()
 _lexer = lex.lex()
 
 
-def read_bnk_data(record_string, carry_last=False, to_date=None):
-    """Read records
+def read_bnk_data(record_string, carry_last=False, to_date=None, strict=False,
+                  debug=0):
+    """Read records.
 
     Arguments:
-      a record_string to read
+      record_string - a record_string to read
+      strict - warnings trigger exceptions (default)
 
     Returns:
      dictionary mapping account names -> account isntances
+
     """
     if not isinstance(record_string, str):
         return None
 
+    _lexer.strict = strict
     _lexer.lineno = 0
     _lexer.ACCOUNTS = {}
     _lexer.GROUPS = {}
     _lexer.META = {}
-    result = _parser.parse(record_string)
+    result = _parser.parse(record_string, debug=debug)
     for rec in result:
         try:
             account = _lexer.ACCOUNTS[rec.account()]
