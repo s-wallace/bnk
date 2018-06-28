@@ -94,6 +94,11 @@ def quarters(fromdate, todate):
             break
 
 
+def years_ago(date, n):
+    """Return a datetime that is n years before specified date"""
+    return dt.date(date.year - n, date.month, date.day)
+
+
 def standard_periods(date):
     """Create a list of standard periods for the specified 'end' date.
 
