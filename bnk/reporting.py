@@ -126,7 +126,7 @@ class PerfOverviewReport(object):
         except Exception as E:
             _log.debug("Couldn't find min/max")
 
-        table.set_column_formats([CF('<', 30)] + [CF('>', 20)]*len(periods))
+        table.set_column_formats([CF('<', 30)] + [CF('>', 20)] * len(periods))
 
         self.table = table
 
@@ -215,7 +215,7 @@ class NetWorthReport(object):
                           fmt='{: ,.2f}'))
 
         table.set_footer(f)
-        table.set_column_formats([CF('<', 30)] + [CF('>', 15)]*len(dates))
+        table.set_column_formats([CF('<', 30)] + [CF('>', 15)] * len(dates))
         return table
 
 
@@ -282,7 +282,7 @@ class BasicStatsReport(object):
             f.append(Cell(sum([c for c in table.column(columni + 1)]),
                           fmt='{: ,.2f}'))
         table.set_footer(f)
-        table.set_column_formats([CF('<', 30)] + [CF('>', 15)]*len(periods))
+        table.set_column_formats([CF('<', 30)] + [CF('>', 15)] * len(periods))
         self.table = table
 
 
@@ -353,5 +353,5 @@ class DetailReport(object):
 
             table.set_row(i, row)
 
-        table.set_column_formats([CF('<', 18)]*2 + [CF('>', 18)]*6)
+        table.set_column_formats([CF('<', 18)] * 2 + [CF('>', 18)] * 6)
         self.table = table

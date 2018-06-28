@@ -368,6 +368,7 @@ class AccountTest(unittest.TestCase):
         self.assertEqual(account.Range(3, 5), (3, 5))
         self.assertEqual("{:.2f}".format(account.Range(3, 5)), "(3.00,5.00)")
 
+
 if __name__ == "__main__":
     WriteCSVs = True
     unittest.main()

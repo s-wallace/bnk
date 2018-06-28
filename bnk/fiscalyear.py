@@ -116,7 +116,7 @@ def standard_periods(date):
 
     try:
         qindex = qse.index(d_md)
-    except:
+    except ValueError:
         raise ValueError("Reports should have and end of quarter date")
 
     periods.append(period_of_preceeding_quarter(date))

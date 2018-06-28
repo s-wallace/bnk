@@ -427,7 +427,7 @@ def read_bnk_data(record_string, carry_last=False, to_date=None, strict=False,
         for a in _lexer.ACCOUNTS:
             try:
                 _lexer.ACCOUNTS[a].carrylast(to_date)
-            except:
+            except ValueError:
                 pass
 
     # note we need to actually create the meta accounts

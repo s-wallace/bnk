@@ -18,7 +18,7 @@ class Cell(object):
         if f is None:
             try:
                 self._f = float(obj)
-            except:
+            except:   # noqa (the scope of possible errors here is large)
                 self._f = float('nan')
         else:
             self._f = f
